@@ -80,30 +80,36 @@ Peers can sync with the archive nodes in case they need to feel gaps.
 
 ## API
 
-The interaction with the `p2pmq` agent is done over **gRPC**:
+The interaction with the `p2pmq` agent is done over **gRPC**.
 
-**Producers**
+#### Control
 
 ```protobuf
-service Broadcast {
-    rpc Publish(PublishRequest) returns (PublishResponse);
+service Control {
+    rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
+    rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeResponse);
 }
 ```
 
-**Consumers**
+#### Messaging
 
 ```protobuf
-service Subscriptions {
-    rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
-    rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeResponse);
+service Messaging {
+    // Publish is used to broadcast messages to the network.
+    // NOTE: In case the topic is unknown, the agent will join the topic.
+    rpc Publish(PublishRequest) returns (PublishResponse);
+    // Listen opens a stream for demultiplexing messages by topic.
+    // NOTE: In case the topic is unknown, the agent will subscribe the topic.
     rpc Listen(ListenRequest) returns (stream Message) {}
 }
 ```
 
-**Msg Validators**
+#### Validation
 
 ```protobuf
 service MsgValidation {
-    rpc Listen(stream Message) returns (stream ValidatedMessage) {}
+    // ValidationChannel is a duplex stream for validating messages.
+    // The stream is used to validate messages before processing and propagating them to the network.
+    rpc ValidationChannel(stream Message) returns (stream ValidatedMessage) {}
 }
 ```
