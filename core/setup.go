@@ -114,7 +114,6 @@ func (d *Daemon) setupMdnsDiscovery(ctx context.Context, host host.Host, service
 				d.connect(p)
 			case <-ctx.Done():
 				return
-			default:
 			}
 		}
 	}()

@@ -81,9 +81,11 @@ func (dc *DiscoveryConfig) Defaults() {
 
 // PubsubConfig contains config for the pubsub router
 type PubsubConfig struct {
-	Topics    []TopicConfig       `json:"topics" yaml:"topics"`
-	Overlay   *OverlayParams      `json:"overlay,omitempty" yaml:"overlay,omitempty"`
-	SubFilter *SubscriptionFilter `json:"subFilter,omitempty" yaml:"subFilter,omitempty"`
+	Topics         []TopicConfig       `json:"topics" yaml:"topics"`
+	Overlay        *OverlayParams      `json:"overlay,omitempty" yaml:"overlay,omitempty"`
+	SubFilter      *SubscriptionFilter `json:"subFilter,omitempty" yaml:"subFilter,omitempty"`
+	MaxMessageSize int                 `json:"maxMessageSize,omitempty" yaml:"maxMessageSize,omitempty"`
+	Trace          bool                `json:"trace,omitempty" yaml:"trace,omitempty"`
 }
 
 // TopicConfig contains configuration of a pubsub topic

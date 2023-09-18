@@ -24,6 +24,10 @@ func (d *Daemon) setupPubsubRouter(ctx context.Context, cfg commons.Config) erro
 		pubsub.WithMessageIdFn(msgIDSha256(20)),
 	}
 
+	if cfg.Pubsub.MaxMessageSize > 0 {
+		opts = append(opts, pubsub.WithMaxMessageSize(cfg.Pubsub.MaxMessageSize))
+	}
+
 	if overlay := cfg.Pubsub.Overlay; overlay != nil && overlay.SeenTtl.Milliseconds() > 0 {
 		opts = append(opts, pubsub.WithSeenMessagesTTL(cfg.Pubsub.Overlay.SeenTtl))
 	}
@@ -45,13 +49,17 @@ func (d *Daemon) setupPubsubRouter(ctx context.Context, cfg commons.Config) erro
 		opts = append(opts, pubsub.WithSubscriptionFilter(sf))
 	}
 
+	if cfg.Pubsub.Trace {
+		opts = append(opts, pubsub.WithEventTracer(newPubsubTracer(d.lggr.Named("PubsubTracer"))))
+	}
+
 	ps, err := pubsub.NewGossipSub(ctx, d.host, opts...)
 	if err != nil {
 		return err
 	}
 	d.pubsub = ps
 	d.denylist = denylist
-	d.pubsubState.topics = make(map[string]*topicWrapper)
+	d.manager.topics = make(map[string]*topicWrapper)
 
 	return nil
 }
@@ -66,7 +74,7 @@ func (d *Daemon) Publish(ctx context.Context, topicName string, data []byte) err
 }
 
 func (d *Daemon) Leave(topicName string) error {
-	tw := d.pubsubState.getTopicWrapper(topicName)
+	tw := d.manager.getTopicWrapper(topicName)
 	state := tw.state.Load()
 	switch state {
 	case topicStateJoined, topicStateErr:
@@ -82,7 +90,7 @@ func (d *Daemon) Leave(topicName string) error {
 }
 
 func (d *Daemon) Unsubscribe(topicName string) {
-	tw := d.pubsubState.getTopicWrapper(topicName)
+	tw := d.manager.getTopicWrapper(topicName)
 	if tw.state.Load() != topicStateUnknown {
 		return
 	}
@@ -134,34 +142,35 @@ func (d *Daemon) listenSubscription(sub *pubsub.Subscription) {
 }
 
 func (d *Daemon) tryJoin(topicName string) (*pubsub.Topic, error) {
-	topicW := d.pubsubState.getTopicWrapper(topicName)
+	topicW := d.manager.getTopicWrapper(topicName)
 	if topicW != nil {
 		if topicW.state.Load() == topicStateJoining {
 			return nil, fmt.Errorf("already tring to join topic %s", topicName)
 		}
 		return topicW.topic, nil
 	}
-	d.pubsubState.joiningTopic(topicName)
+	d.manager.joiningTopic(topicName)
 	topic, err := d.pubsub.Join(topicName)
 	if err != nil {
 		return nil, err
 	}
-	d.pubsubState.upgradeTopic(topicName, topic)
+	d.manager.upgradeTopic(topicName, topic)
 
 	return topic, nil
 }
 
 func (d *Daemon) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription, err error) {
 	topicName := topic.String()
-	sub = d.pubsubState.getSub(topicName)
+	sub = d.manager.getSub(topicName)
 	if sub != nil {
 		return nil, nil
 	}
+	// TODO: create []pubsub.SubOpt
 	sub, err = topic.Subscribe()
 	if err != nil {
 		return nil, err
 	}
-	d.pubsubState.addSub(topicName, sub)
+	d.manager.addSub(topicName, sub)
 	return sub, nil
 }
 
@@ -232,8 +241,6 @@ const (
 func (pm *pubsubManager) joiningTopic(name string) {
 	pm.lock.Lock()
 	defer pm.lock.Unlock()
-
-	// TODO: clear previous topic if exist
 
 	tw := &topicWrapper{}
 	tw.state.Store(topicStateJoining)

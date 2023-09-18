@@ -117,7 +117,9 @@ func setupDaemons(ctx context.Context, t *testing.T, n int, routingFn func(*pubs
 					fmt.Sprintf("%s/p2p/%s", bootAddr, boot.host.ID()),
 				},
 			},
-			Pubsub: &commons.PubsubConfig{},
+			Pubsub: &commons.PubsubConfig{
+				Trace: true,
+			},
 		}
 
 		d, err := NewDaemon(ctx, cfg, NewRouter(1024, 4, routingFn), fmt.Sprintf("peer-%d", i+1))

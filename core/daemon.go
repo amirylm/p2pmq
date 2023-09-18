@@ -27,9 +27,9 @@ type Daemon struct {
 	mdnsSvc mdns.Service
 	pubsub  *pubsub.PubSub
 
-	pubsubState pubsubManager
-	denylist    pubsub.Blacklist
-	router      *Router[*pubsub.Message]
+	manager  pubsubManager
+	denylist pubsub.Blacklist
+	router   *Router[*pubsub.Message]
 }
 
 func NewDaemon(ctx context.Context, cfg commons.Config, router *Router[*pubsub.Message], lggrNS string) (*Daemon, error) {
