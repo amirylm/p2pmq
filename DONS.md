@@ -1,6 +1,14 @@
 # DON Composition
 
-`p2pmq` enables to compose a network of peers cross DONs (Decentralized Oracles Network), acting as a decentralized message bus for DON to DON communication.
+A distributed, permission-less message queue, could have help us achieve fast, secure and reliable communication cross DONs.
+
+## Introduction
+
+A group of `p2pmq` agents forms a standalone set of overlay networks for 
+broadcasting messages over topics.
+
+This approach can be used by DONs (Decentralized Oracles Network), 
+to serve as a decentralized message bus for DON to DON communication.
 
 ## Overview
 
@@ -36,6 +44,6 @@ The actual validation needs to verify that a given report was originated by some
 In addition, sequence number is used to ensure message order and penalize bad actors
 that sends unrealistic sequence numbers.
 
-The disincentivation of sending and propogating invalid messages across the network, helps to protect the network from bad actors. Enabling a trustless environment for DONs to communicate.
+The dis-incentivation of sending and propagating invalid messages across the network, helps to protect the network from bad actors. Enabling a trustless environment for DONs to communicate.
 
 <br />
