@@ -57,7 +57,10 @@ func (d *Daemon) setup(ctx context.Context, cfg commons.Config) (err error) {
 
 	if cfg.Discovery != nil {
 		cfg.Discovery.Defaults()
-		dmode, bootstrappers := parseDiscoveryConfig(*cfg.Discovery)
+		dmode, bootstrappers, err := parseDiscoveryConfig(*cfg.Discovery)
+		if err != nil {
+			return err
+		}
 		dhtOpts := []dht.Option{
 			dht.ProtocolPrefix(protocol.ID(cfg.Discovery.ProtocolPrefix)),
 			dht.Mode(dmode),

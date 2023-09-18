@@ -3,7 +3,7 @@ BUILD_TARGET?=${APP_NAME}
 BUILD_IMG?=${APP_NAME}
 APP_VERSION?=$(git describe --tags $(git rev-list --tags --max-count=1) 2> /dev/null || echo "nightly")
 CFG_PATH?=/route-p2p/router.json
-TEST_PKG?=./...
+TEST_PKG?=./core/...
 TEST_TIMEOUT?=2m
 
 lint:
@@ -13,13 +13,13 @@ fmt:
 	@go fmt ./...
 
 test:
-	@go test -v -race -timeout=${TEST_TIMEOUT} `go list ./... | grep -v -E "cmd|scripts"`
+	@go test -v -race -timeout=${TEST_TIMEOUT} `go list ./... | grep -v -E "cmd|scripts|resources"`
 
 test-pkg:
 	@go test -v -race -timeout=${TEST_TIMEOUT} ${TEST_PKG}
 
 test-cov:
-	@go test -v -race -timeout=${TEST_TIMEOUT} -coverprofile cover.out `go list ./... | grep -v -E "cmd|scripts"`
+	@go test -v -race -timeout=${TEST_TIMEOUT} -coverprofile cover.out `go list ./... | grep -v -E "cmd|scripts|resources"`
 
 test-open-cov:
 	@make test-cov

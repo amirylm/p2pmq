@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/amirylm/p2pmq/commons"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -22,7 +23,7 @@ func (d *Daemon) dhtRoutingFactory(ctx context.Context, opts ...dhtopts.Option) 
 	}
 }
 
-func parseDiscoveryConfig(opts commons.DiscoveryConfig) (dht.ModeOpt, []peer.AddrInfo) {
+func parseDiscoveryConfig(opts commons.DiscoveryConfig) (dht.ModeOpt, []peer.AddrInfo, error) {
 	var dmode dht.ModeOpt
 	switch opts.Mode {
 	case commons.ModeClient:
@@ -38,11 +39,10 @@ func parseDiscoveryConfig(opts commons.DiscoveryConfig) (dht.ModeOpt, []peer.Add
 	for _, bnstr := range opts.Bootstrappers {
 		bn, err := peer.AddrInfoFromString(bnstr)
 		if err != nil {
-			// TODO: handle err
-			continue
+			return dmode, nil, fmt.Errorf("failed to parse bootstrapper addr %s: %w", bnstr, err)
 		}
 		bootstrappers = append(bootstrappers, *bn)
 	}
 
-	return dmode, bootstrappers
+	return dmode, bootstrappers, nil
 }

@@ -56,7 +56,11 @@ func (d *Daemon) Start(ctx context.Context) error {
 	go d.router.Start(ctx)
 
 	if d.cfg.Discovery != nil {
-		_, bootstrappers := parseDiscoveryConfig(*d.cfg.Discovery)
+		_, bootstrappers, err := parseDiscoveryConfig(*d.cfg.Discovery)
+		if err != nil {
+			return err
+		}
+		d.lggr.Debugw("connecting to bootstrappers", "bootstrappers", bootstrappers, "raw", d.cfg.Discovery.Bootstrappers)
 		for _, b := range bootstrappers {
 			d.connect(b)
 		}
