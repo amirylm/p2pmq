@@ -1,0 +1,8 @@
+listenAddrs:
+  - /ip4/0.0.0.0/tcp/0
+discovery:
+  serviceTag: p2pmq/kad
+  mode: server
+  bootstrappers:
+    - /ip4/0.0.0.0/tcp/5001
+pubsub:
