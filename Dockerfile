@@ -7,9 +7,9 @@ RUN apt-get update && \
   git make g++ gcc-aarch64-linux-gnu wget \
   && rm -rf /var/lib/apt/lists/*
 
-ARG APP_VERSION
-ARG APP_NAME
-ARG BUILD_TARGET
+ARG APP_VERSION=nightly
+ARG APP_NAME=p2pmq
+ARG BUILD_TARGET=p2pmq
 
 WORKDIR /p2pmq
 
@@ -23,11 +23,12 @@ RUN GOOS=linux CGO_ENABLED=0 go build -tags netgo -a -v -o ./bin/${BUILD_TARGET}
 
 FROM alpine:latest as runner
 
-ARG BUILD_TARGET
+ARG BUILD_TARGET=p2pmq
 
 RUN apk --no-cache --upgrade add ca-certificates bash
 
 WORKDIR /p2pmq
 
 COPY --from=builder /p2pmq/.env* ./
+COPY --from=builder /p2pmq/resources/config/*.p2pmq.yaml ./
 COPY --from=builder /p2pmq/bin/${BUILD_TARGET} ./app

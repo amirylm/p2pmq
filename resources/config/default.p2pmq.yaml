@@ -1,8 +1,9 @@
 listenAddrs:
-  - /ip4/0.0.0.0/tcp/0
+  - /ip4/0.0.0.0/tcp/5101
 discovery:
   serviceTag: p2pmq/kad
   mode: server
   bootstrappers:
-    - /ip4/0.0.0.0/tcp/5001/p2p/12D3KooWH9DU2whKMyL4WXExj2iZNHmEfg5kDtBKWfmw4QGjJ1eV # change peer id
+    - /ip4/0.0.0.0/tcp/5001/p2p/12D3KooWNBpcEZvtNLkAuHf3RdsRcokeQQNc2WrgU7iHipwVAKWM # change peer id
+# mdnsTag: p2pmq/mdns/test
 pubsub:

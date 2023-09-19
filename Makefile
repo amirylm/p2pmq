@@ -2,7 +2,7 @@ APP_NAME?=p2pmq
 BUILD_TARGET?=${APP_NAME}
 BUILD_IMG?=${APP_NAME}
 APP_VERSION?=$(git describe --tags $(git rev-list --tags --max-count=1) 2> /dev/null || echo "nightly")
-CFG_PATH?=/route-p2p/router.json
+CFG_PATH?=./resources/config/default.p2pmq.yaml
 TEST_PKG?=./core/...
 TEST_TIMEOUT?=2m
 
@@ -35,5 +35,8 @@ build:
 docker-build:
 	@docker build -t "${APP_NAME}" --build-arg APP_VERSION="${APP_VERSION}" --build-arg APP_NAME="${APP_NAME}" --build-arg BUILD_TARGET="${BUILD_TARGET}" .
 
-docker-run:
-	@docker run -d --restart unless-stopped --name "${APP_NAME}" -v "${PWD}/data/${APP_NAME}/:/p2pmq/.data" -p "${TCP_PORT}":"${TCP_PORT}" -p "${GRPC_PORT}":"${GRPC_PORT}" -e "GRPC_PORT=${GRPC_PORT}" -it "${BUILD_IMG}" /p2pmq/app -config=${CFG_PATH}
+docker-run-default:
+	@docker run -d --restart unless-stopped --name "${APP_NAME}" -p "${TCP_PORT}":"${TCP_PORT}" -p "${GRPC_PORT}":"${GRPC_PORT}" -e "GRPC_PORT=${GRPC_PORT}" -it "${BUILD_IMG}" /p2pmq/app -config=./default.p2pmq.yaml
+
+docker-run-boot:
+	@docker run -d --restart unless-stopped --name "${APP_NAME}" -p "${TCP_PORT}":"${TCP_PORT}" -p "${GRPC_PORT}":"${GRPC_PORT}" -e "GRPC_PORT=${GRPC_PORT}" -it "${BUILD_IMG}" /p2pmq/app -config=./bootstrapper.p2pmq.yaml
