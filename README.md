@@ -1,6 +1,10 @@
 # p2pmq
 
+<br />
+
 **NOTE: This is an experimental work in progress. DO NOT USE**
+
+<br />
 
 `p2pmq` is a distributed, permissionless message queue.
 
