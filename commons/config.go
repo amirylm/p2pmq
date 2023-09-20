@@ -37,12 +37,21 @@ type Config struct {
 
 	MdnsTag string `json:"mdnsTag,omitempty" yaml:"mdnsTag,omitempty"`
 
+	MsgRouterQueueSize int `json:"msgRouterQueueSize,omitempty" yaml:"msgRouterQueueSize,omitempty"`
+	MsgRouterWorkers   int `json:"msgRouterWorkers,omitempty" yaml:"msgRouterWorkers,omitempty"`
+
 	PProf *PProf `json:"pprof,omitempty" yaml:"pprof,omitempty"`
 }
 
 func (c *Config) Defaults() {
 	if c.DialTimeout.Milliseconds() == 0 {
 		c.DialTimeout = time.Second * 15
+	}
+	if c.MsgRouterQueueSize == 0 {
+		c.MsgRouterQueueSize = 1024
+	}
+	if c.MsgRouterWorkers == 0 {
+		c.MsgRouterWorkers = 10
 	}
 }
 
@@ -81,21 +90,33 @@ func (dc *DiscoveryConfig) Defaults() {
 
 // PubsubConfig contains config for the pubsub router
 type PubsubConfig struct {
-	Topics         []TopicConfig       `json:"topics" yaml:"topics"`
-	Overlay        *OverlayParams      `json:"overlay,omitempty" yaml:"overlay,omitempty"`
-	SubFilter      *SubscriptionFilter `json:"subFilter,omitempty" yaml:"subFilter,omitempty"`
-	MaxMessageSize int                 `json:"maxMessageSize,omitempty" yaml:"maxMessageSize,omitempty"`
-	Trace          bool                `json:"trace,omitempty" yaml:"trace,omitempty"`
+	Topics               []TopicConfig       `json:"topics" yaml:"topics"`
+	Overlay              *OverlayParams      `json:"overlay,omitempty" yaml:"overlay,omitempty"`
+	SubFilter            *SubscriptionFilter `json:"subFilter,omitempty" yaml:"subFilter,omitempty"`
+	MaxMessageSize       int                 `json:"maxMessageSize,omitempty" yaml:"maxMessageSize,omitempty"`
+	MsgValidationTimeout time.Duration       `json:"msgValidationTimeout,omitempty" yaml:"msgValidationTimeout,omitempty"`
+	Scoring              *ScoringParams      `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	Trace                bool                `json:"trace,omitempty" yaml:"trace,omitempty"`
+}
+
+func (psc PubsubConfig) GetTopicConfig(name string) (TopicConfig, bool) {
+	for _, t := range psc.Topics {
+		if t.Name == name {
+			return t, true
+		}
+	}
+	return TopicConfig{}, false
 }
 
 // TopicConfig contains configuration of a pubsub topic
 type TopicConfig struct {
-	Name         string         `json:"name" yaml:"name"`
-	BufferSize   int            `json:"bufferSize,omitempty" yaml:"bufferSize,omitempty"`
-	RateLimit    float64        `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
-	Overlay      *OverlayParams `json:"overlay,omitempty" yaml:"overlay,omitempty"`
-	MsgValidator string         `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
-	Scoring      *ScoringParams `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	Name                    string         `json:"name" yaml:"name"`
+	BufferSize              int            `json:"bufferSize,omitempty" yaml:"bufferSize,omitempty"`
+	RateLimit               float64        `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
+	Overlay                 *OverlayParams `json:"overlay,omitempty" yaml:"overlay,omitempty"`
+	MsgValidator            string         `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
+	MsgValidatorConcurrency int            `json:"msgValidatorConcurrency,omitempty" yaml:"msgValidatorConcurrency,omitempty"`
+	Scoring                 *ScoringParams `json:"scoring,omitempty" yaml:"scoring,omitempty"`
 }
 
 // SubscriptionFilter configurations

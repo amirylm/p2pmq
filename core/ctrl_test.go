@@ -15,9 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/amirylm/p2pmq/commons"
+	"github.com/amirylm/p2pmq/core/gossip"
 )
 
-func TestDaemon_Sanity(t *testing.T) {
+func TestController_Sanity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -26,14 +27,20 @@ func TestDaemon_Sanity(t *testing.T) {
 
 	require.NoError(t, logging.SetLogLevelRegex("p2pmq", "debug"))
 
-	hitMap := map[string]*atomic.Int32{}
+	valHitMap := map[string]*atomic.Int32{}
+	msgHitMap := map[string]*atomic.Int32{}
 	for i := 0; i < n; i++ {
-		hitMap[fmt.Sprintf("test-%d", i+1)] = &atomic.Int32{}
+		topic := fmt.Sprintf("test-%d", i+1)
+		msgHitMap[topic] = &atomic.Int32{}
+		valHitMap[topic] = &atomic.Int32{}
 	}
 
-	daemons, done := setupDaemons(ctx, t, n, func(m *pubsub.Message) {
-		hitMap[m.GetTopic()].Add(1)
+	controllers, done := setupControllers(ctx, t, n, func(msg *pubsub.Message) {
+		msgHitMap[msg.GetTopic()].Add(1)
 		// lggr.Infow("got pubsub message", "topic", m.GetTopic(), "from", m.GetFrom(), "data", string(m.GetData()))
+	}, func(p peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+		valHitMap[msg.GetTopic()].Add(1)
+		return pubsub.ValidationAccept
 	})
 	defer done()
 
@@ -42,12 +49,12 @@ func TestDaemon_Sanity(t *testing.T) {
 	t.Log("peers connected")
 
 	var wg sync.WaitGroup
-	for _, d := range daemons {
+	for _, d := range controllers {
 		wg.Add(1)
-		go func(d *Daemon) {
+		go func(c *Controller) {
 			defer wg.Done()
 			for i := 0; i < n; i++ {
-				require.NoError(t, d.Subscribe(ctx, fmt.Sprintf("test-%d", i+1)))
+				require.NoError(t, c.Subscribe(ctx, fmt.Sprintf("test-%d", i+1)))
 			}
 		}(d)
 	}
@@ -57,11 +64,11 @@ func TestDaemon_Sanity(t *testing.T) {
 	<-time.After(time.Second * 2) // TODO: avoid timeout
 
 	for r := 0; r < rounds; r++ {
-		for i, d := range daemons {
+		for i, d := range controllers {
 			wg.Add(1)
-			go func(d *Daemon, r, i int) {
+			go func(c *Controller, r, i int) {
 				defer wg.Done()
-				require.NoError(t, d.Publish(ctx, fmt.Sprintf("test-%d", i+1), []byte(fmt.Sprintf("round-%d-test-data-%d", r+1, i+1))))
+				require.NoError(t, c.Publish(ctx, fmt.Sprintf("test-%d", i+1), []byte(fmt.Sprintf("round-%d-test-data-%d", r+1, i+1))))
 			}(d, r, i)
 		}
 	}
@@ -70,15 +77,15 @@ func TestDaemon_Sanity(t *testing.T) {
 
 	<-time.After(time.Second * 2) // TODO: avoid timeout
 
-	for topic, counter := range hitMap {
+	for topic, counter := range msgHitMap {
 		count := int(counter.Load()) / n // per node
 		require.Equal(t, rounds, count, "should get %d messages on topic %s", rounds, topic)
 	}
 }
 
-func setupDaemons(ctx context.Context, t *testing.T, n int, routingFn func(*pubsub.Message)) ([]*Daemon, func()) {
+func setupControllers(ctx context.Context, t *testing.T, n int, routingFn func(*pubsub.Message), valFn func(peer.ID, *pubsub.Message) pubsub.ValidationResult) ([]*Controller, func()) {
 	bootAddr := "/ip4/127.0.0.1/tcp/5001"
-	boot, err := NewDaemon(ctx, commons.Config{
+	boot, err := NewController(ctx, commons.Config{
 		ListenAddrs: []string{
 			bootAddr,
 		},
@@ -87,12 +94,10 @@ func setupDaemons(ctx context.Context, t *testing.T, n int, routingFn func(*pubs
 			Mode:           commons.ModeBootstrapper,
 			ProtocolPrefix: "p2pmq/kad/test",
 		},
-	}, nil, "boot")
+	}, nil, nil, "boot")
 	require.NoError(t, err)
 	t.Logf("created bootstrapper %s", boot.host.ID())
-	go func() {
-		_ = boot.Start(ctx)
-	}()
+	go boot.Start(ctx)
 
 	t.Logf("started bootstrapper %s", boot.host.ID())
 
@@ -103,7 +108,7 @@ func setupDaemons(ctx context.Context, t *testing.T, n int, routingFn func(*pubs
 		hitMap[fmt.Sprintf("test-%d", i+1)] = &atomic.Int32{}
 	}
 
-	daemons := make([]*Daemon, n)
+	controllers := make([]*Controller, n)
 	for i := 0; i < n; i++ {
 		cfg := commons.Config{
 			ListenAddrs: []string{
@@ -117,39 +122,43 @@ func setupDaemons(ctx context.Context, t *testing.T, n int, routingFn func(*pubs
 					fmt.Sprintf("%s/p2p/%s", bootAddr, boot.host.ID()),
 				},
 			},
-			Pubsub: &commons.PubsubConfig{
-				Trace: true,
-			},
+			Pubsub: &commons.PubsubConfig{},
 		}
-
-		d, err := NewDaemon(ctx, cfg, NewRouter(1024, 4, routingFn), fmt.Sprintf("peer-%d", i+1))
+		msgRouter := NewMsgRouter[error](1024, 4, func(mw *MsgWrapper[error]) {
+			routingFn(mw.Msg)
+		}, gossip.MsgIDSha256(20))
+		valRouter := NewMsgRouter[pubsub.ValidationResult](1024, 4, func(mw *MsgWrapper[pubsub.ValidationResult]) {
+			res := valFn(mw.Peer, mw.Msg)
+			mw.Result = res
+		}, gossip.MsgIDSha256(20))
+		c, err := NewController(ctx, cfg, msgRouter, valRouter, fmt.Sprintf("peer-%d", i+1))
 		require.NoError(t, err)
-		daemons[i] = d
-		t.Logf("created daemon %d: %s", i+1, d.host.ID())
+		controllers[i] = c
+		t.Logf("created controller %d: %s", i+1, c.host.ID())
 	}
 
-	for i, d := range daemons {
-		require.NoError(t, d.Start(ctx))
-		t.Logf("started daemon %d: %s", i+1, d.host.ID())
+	for i, c := range controllers {
+		c.Start(ctx)
+		t.Logf("started controller %d: %s", i+1, c.host.ID())
 	}
 
-	waitDaemonsConnected(n)
+	waitControllersConnected(n)
 
-	return daemons, func() {
-		_ = boot.Close()
-		for _, d := range daemons {
-			_ = d.Close()
+	return controllers, func() {
+		boot.Close()
+		for _, c := range controllers {
+			c.Close()
 		}
 	}
 }
 
-func waitDaemonsConnected(n int, daemons ...*Daemon) {
-	for _, d := range daemons {
+func waitControllersConnected(n int, controllers ...*Controller) {
+	for _, c := range controllers {
 		connected := make([]peer.ID, 0)
 		for len(connected) < n {
-			peers := d.host.Network().Peers()
+			peers := c.host.Network().Peers()
 			for _, pid := range peers {
-				switch d.host.Network().Connectedness(pid) {
+				switch c.host.Network().Connectedness(pid) {
 				case libp2pnetwork.Connected:
 					connected = append(connected, pid)
 				default:

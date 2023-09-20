@@ -12,13 +12,13 @@ import (
 	"github.com/libp2p/go-libp2p/core/routing"
 )
 
-func (d *Daemon) dhtRoutingFactory(ctx context.Context, opts ...dhtopts.Option) func(host.Host) (routing.PeerRouting, error) {
+func (c *Controller) dhtRoutingFactory(ctx context.Context, opts ...dhtopts.Option) func(host.Host) (routing.PeerRouting, error) {
 	return func(h host.Host) (routing.PeerRouting, error) {
 		dhtInst, err := dht.New(ctx, h, opts...)
 		if err != nil {
 			return nil, err
 		}
-		d.dht = dhtInst
+		c.dht = dhtInst
 		return dhtInst, nil
 	}
 }

@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sync"
@@ -11,17 +9,28 @@ import (
 	"time"
 
 	"github.com/amirylm/p2pmq/commons"
+	"github.com/amirylm/p2pmq/core/gossip"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap"
 )
 
-func (d *Daemon) setupPubsubRouter(ctx context.Context, cfg commons.Config) error {
+var (
+	inspectInterval = time.Minute
+)
+
+func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) error {
 	opts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
-		pubsub.WithGossipSubParams(gossipSubParams(cfg.Pubsub.Overlay)),
-		pubsub.WithMessageIdFn(msgIDSha256(20)),
+		pubsub.WithGossipSubParams(gossip.GossipSubParams(cfg.Pubsub.Overlay)),
+		pubsub.WithMessageIdFn(gossip.MsgIDSha256(20)),
+	}
+
+	if cfg.Pubsub.Scoring != nil {
+		opts = append(opts, pubsub.WithPeerScore(gossip.PeerScores(*cfg.Pubsub)))
+		opts = append(opts, pubsub.WithPeerScoreInspect(c.inspectPeerScores, inspectInterval))
 	}
 
 	if cfg.Pubsub.MaxMessageSize > 0 {
@@ -46,26 +55,27 @@ func (d *Daemon) setupPubsubRouter(ctx context.Context, cfg commons.Config) erro
 		if cfg.Pubsub.SubFilter.Limit > 0 {
 			sf = pubsub.WrapLimitSubscriptionFilter(sf, cfg.Pubsub.SubFilter.Limit)
 		}
+		c.subFilter = sf
 		opts = append(opts, pubsub.WithSubscriptionFilter(sf))
 	}
 
 	if cfg.Pubsub.Trace {
-		opts = append(opts, pubsub.WithEventTracer(newPubsubTracer(d.lggr.Named("PubsubTracer"))))
+		opts = append(opts, pubsub.WithEventTracer(newPubsubTracer(c.lggr.Named("PubsubTracer"))))
 	}
 
-	ps, err := pubsub.NewGossipSub(ctx, d.host, opts...)
+	ps, err := pubsub.NewGossipSub(ctx, c.host, opts...)
 	if err != nil {
 		return err
 	}
-	d.pubsub = ps
-	d.denylist = denylist
-	d.manager.topics = make(map[string]*topicWrapper)
+	c.pubsub = ps
+	c.denylist = denylist
+	c.manager.topics = make(map[string]*topicWrapper)
 
 	return nil
 }
 
-func (d *Daemon) Publish(ctx context.Context, topicName string, data []byte) error {
-	topic, err := d.tryJoin(topicName)
+func (c *Controller) Publish(ctx context.Context, topicName string, data []byte) error {
+	topic, err := c.tryJoin(topicName)
 	if err != nil {
 		return err
 	}
@@ -73,8 +83,8 @@ func (d *Daemon) Publish(ctx context.Context, topicName string, data []byte) err
 	return topic.Publish(ctx, data)
 }
 
-func (d *Daemon) Leave(topicName string) error {
-	tw := d.manager.getTopicWrapper(topicName)
+func (c *Controller) Leave(topicName string) error {
+	tw := c.manager.getTopicWrapper(topicName)
 	state := tw.state.Load()
 	switch state {
 	case topicStateJoined, topicStateErr:
@@ -89,20 +99,20 @@ func (d *Daemon) Leave(topicName string) error {
 	return nil
 }
 
-func (d *Daemon) Unsubscribe(topicName string) {
-	tw := d.manager.getTopicWrapper(topicName)
+func (c *Controller) Unsubscribe(topicName string) {
+	tw := c.manager.getTopicWrapper(topicName)
 	if tw.state.Load() != topicStateUnknown {
 		return
 	}
 	tw.sub.Cancel()
 }
 
-func (d *Daemon) Subscribe(ctx context.Context, topicName string) error {
-	topic, err := d.tryJoin(topicName)
+func (c *Controller) Subscribe(ctx context.Context, topicName string) error {
+	topic, err := c.tryJoin(topicName)
 	if err != nil {
 		return err
 	}
-	sub, err := d.trySubscribe(topic)
+	sub, err := c.trySubscribe(topic)
 	if err != nil {
 		return err
 	}
@@ -110,114 +120,105 @@ func (d *Daemon) Subscribe(ctx context.Context, topicName string) error {
 		// already subscribed
 		return nil
 	}
-	go d.listenSubscription(sub)
+	c.threadControl.Go(func(ctx context.Context) {
+		c.listenSubscription(ctx, sub)
+	})
 
 	return nil
 }
 
-func (d *Daemon) listenSubscription(sub *pubsub.Subscription) {
-	ctx, cancel := context.WithCancel(d.ctx)
-	defer cancel()
+func (c *Controller) listenSubscription(ctx context.Context, sub *pubsub.Subscription) {
+	c.lggr.Debugw("listening on topic", "topic", sub.Topic())
 
-	d.lggr.Debugw("listening on topic", "topic", sub.Topic())
-
-	for {
+	for ctx.Err() == nil {
 		msg, err := sub.Next(ctx)
 		if err != nil {
 			if err == pubsub.ErrSubscriptionCancelled || ctx.Err() != nil {
 				return
 			}
-			d.lggr.Warnw("failed to get next msg for subscription", "err", err, "topic", sub.Topic())
+			c.lggr.Warnw("failed to get next msg for subscription", "err", err, "topic", sub.Topic())
 			// backoff
-			time.Sleep(time.Second)
+			time.Sleep(time.Second) // TODO: jitter
 			continue
 		}
 		if msg == nil {
 			continue
 		}
-		if err := d.router.Handle(msg); err != nil {
-			d.lggr.Warnw("failed to handle next msg for subscription", "err", err, "topic", sub.Topic())
+		if err := c.msgRouter.Handle(ctx, msg.ReceivedFrom, msg); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			c.lggr.Warnw("failed to handle next msg for subscription", "err", err, "topic", sub.Topic())
 		}
 	}
 }
 
-func (d *Daemon) tryJoin(topicName string) (*pubsub.Topic, error) {
-	topicW := d.manager.getTopicWrapper(topicName)
+func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
+	// TODO: apply subscription filter
+
+	topicW := c.manager.getTopicWrapper(topicName)
 	if topicW != nil {
 		if topicW.state.Load() == topicStateJoining {
 			return nil, fmt.Errorf("already tring to join topic %s", topicName)
 		}
 		return topicW.topic, nil
 	}
-	d.manager.joiningTopic(topicName)
-	topic, err := d.pubsub.Join(topicName)
+	c.manager.joiningTopic(topicName)
+	topic, err := c.pubsub.Join(topicName)
 	if err != nil {
 		return nil, err
 	}
-	d.manager.upgradeTopic(topicName, topic)
+	c.manager.upgradeTopic(topicName, topic)
+
+	cfg, ok := c.cfg.Pubsub.GetTopicConfig(topicName)
+	if ok && len(cfg.MsgValidator) > 0 {
+		valOpts := []pubsub.ValidatorOpt{
+			pubsub.WithValidatorInline(false),
+			pubsub.WithValidatorTimeout(time.Second * 5),
+		}
+		if cfg.MsgValidatorConcurrency > 0 {
+			valOpts = append(valOpts, pubsub.WithValidatorConcurrency(cfg.MsgValidatorConcurrency))
+		}
+		if err := c.pubsub.RegisterTopicValidator(topicName, c.validateMsg, valOpts...); err != nil {
+			return topic, err
+		}
+	}
 
 	return topic, nil
 }
 
-func (d *Daemon) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription, err error) {
+func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription, err error) {
 	topicName := topic.String()
-	sub = d.manager.getSub(topicName)
+	sub = c.manager.getSub(topicName)
 	if sub != nil {
 		return nil, nil
 	}
-	// TODO: create []pubsub.SubOpt
-	sub, err = topic.Subscribe()
+	var opts []pubsub.SubOpt
+	cfg, ok := c.cfg.Pubsub.GetTopicConfig(topicName)
+	if ok {
+		if cfg.BufferSize > 0 {
+			opts = append(opts, pubsub.WithBufferSize(cfg.BufferSize))
+		}
+	}
+	sub, err = topic.Subscribe(opts...)
 	if err != nil {
 		return nil, err
 	}
-	d.manager.addSub(topicName, sub)
+	c.manager.addSub(topicName, sub)
 	return sub, nil
 }
 
-// msgIDSha256 uses sha256 hash of the message content
-func msgIDSha256(size int) pubsub.MsgIdFunction {
-	return func(pmsg *pubsub_pb.Message) string {
-		msg := pmsg.GetData()
-		if len(msg) == 0 {
-			return ""
-		}
-		// TODO: optimize, e.g. by using a pool of hashers
-		h := sha256.Sum256(msg)
-		return hex.EncodeToString(h[:size])
+func (c *Controller) validateMsg(ctx context.Context, p peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+	res, err := c.valRouter.HandleWait(ctx, p, msg)
+	if err != nil {
+		c.lggr.Warnw("failed to handle msg", "err", err)
+		return pubsub.ValidationIgnore
 	}
+	return res
 }
 
-func gossipSubParams(overlayp *commons.OverlayParams) pubsub.GossipSubParams {
-	gsCfg := pubsub.DefaultGossipSubParams()
-	var overlay commons.OverlayParams
-	if overlayp != nil {
-		overlay = *overlayp
-	}
-	if overlay.D > 0 {
-		gsCfg.D = int(overlay.D)
-	}
-	if overlay.Dlow > 0 {
-		gsCfg.Dlo = int(overlay.Dlow)
-	}
-	if overlay.Dhi > 0 {
-		gsCfg.Dhi = int(overlay.Dhi)
-	}
-	if overlay.Dlazy > 0 {
-		gsCfg.Dlazy = int(overlay.Dlazy)
-	}
-	if overlay.McacheGossip > 0 {
-		gsCfg.MaxIHaveMessages = int(overlay.McacheGossip)
-	}
-	if overlay.McacheLen > 0 {
-		gsCfg.MaxIHaveLength = int(overlay.McacheLen)
-	}
-	if fanoutTtl := overlay.FanoutTtl; fanoutTtl.Milliseconds() > 0 {
-		gsCfg.FanoutTTL = fanoutTtl
-	}
-	if heartbeat := overlay.HeartbeatInterval; heartbeat.Milliseconds() > 0 {
-		gsCfg.HeartbeatInterval = heartbeat
-	}
-	return gsCfg
+func (c *Controller) inspectPeerScores(map[peer.ID]*pubsub.PeerScoreSnapshot) {
+	// TODO
 }
 
 type pubsubManager struct {
