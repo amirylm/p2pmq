@@ -170,14 +170,16 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 	}
 	c.manager.upgradeTopic(topicName, topic)
 
-	cfg, ok := c.cfg.Pubsub.GetTopicConfig(topicName)
-	if ok && len(cfg.MsgValidator) > 0 {
+	cfg, _ := c.cfg.Pubsub.GetTopicConfig(topicName)
+	if cfg.MsgValidator != nil || c.cfg.Pubsub.MsgValidator != nil {
+		msgValConfig := commons.MsgValidationConfig{}.Defaults(c.cfg.Pubsub.MsgValidator)
+		if cfg.MsgValidator != nil {
+			msgValConfig = msgValConfig.Defaults(cfg.MsgValidator)
+		}
 		valOpts := []pubsub.ValidatorOpt{
 			pubsub.WithValidatorInline(false),
-			pubsub.WithValidatorTimeout(time.Second * 5),
-		}
-		if cfg.MsgValidatorConcurrency > 0 {
-			valOpts = append(valOpts, pubsub.WithValidatorConcurrency(cfg.MsgValidatorConcurrency))
+			pubsub.WithValidatorTimeout(msgValConfig.Timeout),
+			pubsub.WithValidatorConcurrency(msgValConfig.Concurrency),
 		}
 		if err := c.pubsub.RegisterTopicValidator(topicName, c.validateMsg, valOpts...); err != nil {
 			return topic, err

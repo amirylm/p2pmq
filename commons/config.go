@@ -1,13 +1,7 @@
 package commons
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 type DiscMode string
@@ -90,13 +84,14 @@ func (dc *DiscoveryConfig) Defaults() {
 
 // PubsubConfig contains config for the pubsub router
 type PubsubConfig struct {
-	Topics               []TopicConfig       `json:"topics" yaml:"topics"`
-	Overlay              *OverlayParams      `json:"overlay,omitempty" yaml:"overlay,omitempty"`
-	SubFilter            *SubscriptionFilter `json:"subFilter,omitempty" yaml:"subFilter,omitempty"`
-	MaxMessageSize       int                 `json:"maxMessageSize,omitempty" yaml:"maxMessageSize,omitempty"`
-	MsgValidationTimeout time.Duration       `json:"msgValidationTimeout,omitempty" yaml:"msgValidationTimeout,omitempty"`
-	Scoring              *ScoringParams      `json:"scoring,omitempty" yaml:"scoring,omitempty"`
-	Trace                bool                `json:"trace,omitempty" yaml:"trace,omitempty"`
+	Topics               []TopicConfig        `json:"topics" yaml:"topics"`
+	Overlay              *OverlayParams       `json:"overlay,omitempty" yaml:"overlay,omitempty"`
+	SubFilter            *SubscriptionFilter  `json:"subFilter,omitempty" yaml:"subFilter,omitempty"`
+	MaxMessageSize       int                  `json:"maxMessageSize,omitempty" yaml:"maxMessageSize,omitempty"`
+	MsgValidationTimeout time.Duration        `json:"msgValidationTimeout,omitempty" yaml:"msgValidationTimeout,omitempty"`
+	Scoring              *ScoringParams       `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	MsgValidator         *MsgValidationConfig `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
+	Trace                bool                 `json:"trace,omitempty" yaml:"trace,omitempty"`
 }
 
 func (psc PubsubConfig) GetTopicConfig(name string) (TopicConfig, bool) {
@@ -108,15 +103,37 @@ func (psc PubsubConfig) GetTopicConfig(name string) (TopicConfig, bool) {
 	return TopicConfig{}, false
 }
 
+type MsgValidationConfig struct {
+	Timeout     time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	Concurrency int           `json:"concurrency,omitempty" yaml:"concurrency,omitempty"`
+}
+
+func (mvc MsgValidationConfig) Defaults(other *MsgValidationConfig) MsgValidationConfig {
+	if mvc.Timeout.Milliseconds() == 0 {
+		mvc.Timeout = time.Second * 5
+	}
+	if mvc.Concurrency == 0 {
+		mvc.Concurrency = 10
+	}
+	if other != nil {
+		if other.Timeout.Milliseconds() > 0 {
+			mvc.Timeout = other.Timeout
+		}
+		if other.Concurrency > 0 {
+			mvc.Concurrency = other.Concurrency
+		}
+	}
+	return mvc
+}
+
 // TopicConfig contains configuration of a pubsub topic
 type TopicConfig struct {
-	Name                    string         `json:"name" yaml:"name"`
-	BufferSize              int            `json:"bufferSize,omitempty" yaml:"bufferSize,omitempty"`
-	RateLimit               float64        `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
-	Overlay                 *OverlayParams `json:"overlay,omitempty" yaml:"overlay,omitempty"`
-	MsgValidator            string         `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
-	MsgValidatorConcurrency int            `json:"msgValidatorConcurrency,omitempty" yaml:"msgValidatorConcurrency,omitempty"`
-	Scoring                 *ScoringParams `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	Name         string               `json:"name" yaml:"name"`
+	BufferSize   int                  `json:"bufferSize,omitempty" yaml:"bufferSize,omitempty"`
+	RateLimit    float64              `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
+	Overlay      *OverlayParams       `json:"overlay,omitempty" yaml:"overlay,omitempty"`
+	Scoring      *ScoringParams       `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	MsgValidator *MsgValidationConfig `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
 }
 
 // SubscriptionFilter configurations
@@ -157,21 +174,4 @@ type ScoringParams struct {
 type PProf struct {
 	Enabled bool
 	Port    uint
-}
-
-func ReadConfig(cfgAddr string) (*Config, error) {
-	raw, err := os.ReadFile(cfgAddr)
-	if err != nil {
-		return nil, fmt.Errorf("could not read config file: %w", err)
-	}
-	cfg := Config{}
-	if strings.Contains(cfgAddr, ".yaml") || strings.Contains(cfgAddr, ".yml") {
-		err = yaml.Unmarshal(raw, &cfg)
-	} else {
-		err = json.Unmarshal(raw, &cfg)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal config file: %w", err)
-	}
-	return &cfg, nil
 }
