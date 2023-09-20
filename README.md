@@ -1,5 +1,7 @@
 # p2pmq
 
+**NOTE: This is an experimental work in progress. DO NOT USE**
+
 `p2pmq` is a distributed, permissionless message queue.
 
 A group of `p2pmq` peers forms a standalone network for 
