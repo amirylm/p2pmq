@@ -20,5 +20,3 @@ restarts, network partition, etc.
 ![composer-p2pmq.png](./resources/img/composer-p2pmq.png)
 
 <br />
-
-See [Protocol Overview](./PROTOCOL.md) for more details.
