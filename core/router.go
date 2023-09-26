@@ -31,6 +31,8 @@ type MsgRouter[T any] interface {
 	HandleWait(pctx context.Context, p peer.ID, msg *pubsub.Message) (T, error)
 
 	Start(pctx context.Context)
+
+	RefreshHandler(handler func(*MsgWrapper[T]))
 }
 
 type msgRouter[T any] struct {
@@ -53,6 +55,17 @@ func NewMsgRouter[T any](qSize, workers int, handler func(*MsgWrapper[T]), msgID
 	}
 }
 
+// RefreshHandler closes the router quietly and reassigns an handler.
+// NOTE: a call to this function requires to restart the router
+func (r *msgRouter[T]) RefreshHandler(handler func(*MsgWrapper[T])) {
+	// close quietly
+	r.q <- nil
+	r.threadControl.Close()
+
+	r.handler = handler
+	r.threadControl = utils.NewThreadControl()
+}
+
 func (r *msgRouter[T]) Start(pctx context.Context) {
 	ctx, cancel := context.WithCancel(pctx)
 	defer cancel()
@@ -60,6 +73,9 @@ func (r *msgRouter[T]) Start(pctx context.Context) {
 	for {
 		select {
 		case msg := <-r.q:
+			if msg == nil {
+				return
+			}
 			r.dispatchMsg(msg)
 		case <-ctx.Done():
 			close(r.q)

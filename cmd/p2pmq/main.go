@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
+	"time"
 
+	grpcapi "github.com/amirylm/p2pmq/api/grpc"
 	"github.com/amirylm/p2pmq/commons"
 	"github.com/amirylm/p2pmq/core"
 	"github.com/amirylm/p2pmq/core/gossip"
@@ -16,14 +17,13 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:  "route-p2p",
-		Usage: "p2p router",
+		Name: "p2pmq",
 		Flags: []cli.Flag{
-			// cli.IntFlag{
-			// 	Name:   "grpc-port",
-			// 	EnvVar: "GRPC_PORT",
-			// 	Value:  12001,
-			// },
+			cli.IntFlag{
+				Name:   "grpc-port",
+				EnvVar: "GRPC_PORT",
+				Value:  8001,
+			},
 			// cli.IntFlag{
 			// 	Name:   "monitor-port",
 			// 	EnvVar: "MONITOR_PORT",
@@ -52,79 +52,62 @@ func main() {
 			_ = logging.SetLogLevelRegex("p2pmq.*", c.String("loglevel"))
 
 			lggr := logging.Logger("p2pmq/cli")
+			cfgPath := c.String("config")
+			if len(cfgPath) == 0 {
+				return fmt.Errorf("missing config file")
+			}
+			cfg, err := commons.ReadConfig(cfgPath)
+			if err != nil {
+				return fmt.Errorf("failed to read config file: %w", err)
+			}
+			rlggr := lggr.Named("msgRouter")
+			msgRouter := core.NewMsgRouter(cfg.MsgRouterQueueSize, cfg.MsgRouterWorkers, func(mw *core.MsgWrapper[error]) {
+				rlggr.Debugw("Got message", "from", mw.Peer, "msg", mw.Msg)
+			}, gossip.MsgIDSha256(20))
+			valRouter := core.NewMsgRouter(cfg.MsgRouterQueueSize, cfg.MsgRouterWorkers, func(mw *core.MsgWrapper[pubsub.ValidationResult]) {
+				rlggr.Debugw("Validating message", "from", mw.Peer, "msg", mw.Msg)
+				mw.Result = pubsub.ValidationAccept
+			}, gossip.MsgIDSha256(20))
 
-			var ctrl *core.Controller
-			if cfgPath := c.String("config"); len(cfgPath) > 0 {
-				cfg, err := commons.ReadConfig(cfgPath)
-				if err != nil {
-					return err
-				}
-				rlggr := lggr.Named("msgRouter")
-				msgRouter := core.NewMsgRouter[error](cfg.MsgRouterQueueSize, cfg.MsgRouterWorkers, func(mw *core.MsgWrapper[error]) {
-					rlggr.Debugw("Got message", "from", mw.Peer, "msg", mw.Msg)
-				}, gossip.MsgIDSha256(20))
-				valRouter := core.NewMsgRouter[pubsub.ValidationResult](cfg.MsgRouterQueueSize, cfg.MsgRouterWorkers, func(mw *core.MsgWrapper[pubsub.ValidationResult]) {
-					rlggr.Debugw("Validating message", "from", mw.Peer, "msg", mw.Msg)
-					mw.Result = pubsub.ValidationAccept
-				}, gossip.MsgIDSha256(20))
-				ctrl, err = core.NewController(ctx, *cfg, msgRouter, valRouter, "node")
-				if err != nil {
-					return err
-				}
-				ctrl.Start(ctx)
-				defer ctrl.Close()
-
-				// <-time.After(time.Second * 10)
-
-				// if cfg.Pubsub != nil {
-				// 	if err := ctrl.Subscribe(ctx, "test-1"); err != nil {
-				// 		lggr.Errorw("could not subscribe to topic", "topic", "test-1", "err", err)
-				// 	}
-				// 	for i := 0; i < 10; i++ {
-				// 		<-time.After(time.Second * 5)
-				// 		if err := ctrl.Publish(ctx, "test-1", []byte(fmt.Sprintf("test-data-%d-%s", i, ctrl.ID()))); err != nil {
-				// 			lggr.Errorw("could not subscribe to topic", "topic", "test-1", "err", err)
-				// 		}
-				// 	}
-				// }
+			ctrl, err := core.NewController(ctx, *cfg, msgRouter, valRouter, "node")
+			if err != nil {
+				return err
 			}
 
-			if ctrl == nil {
-				return fmt.Errorf("could not create daemon instance, please provide a config file")
-			}
+			control, msgR, valR := grpcapi.NewServices(ctrl, 128)
+			ctrl.RefreshRouters(func(mw *core.MsgWrapper[error]) {
+				rlggr.Debugw("Got message", "from", mw.Peer, "msg", mw.Msg)
+				if err := msgR.Push(mw); err != nil {
+					rlggr.Debugw("Failed to push incoming message", "from", mw.Peer, "msg", mw.Msg)
+				}
+			}, func(mw *core.MsgWrapper[pubsub.ValidationResult]) {
+				rlggr.Debugw("Validating message", "from", mw.Peer, "msg", mw.Msg)
+				ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+				defer cancel()
 
-			quit := make(chan os.Signal, 1)
-			signal.Notify(quit, os.Interrupt)
-			<-quit
+				mw.Result = valR.PushWait(ctx, mw)
+			})
+			srv := grpcapi.NewGrpcServer(control, msgR, valR)
 
-			logging.Logger("p2pmq/cli").Info("closing node")
+			ctrl.Start(ctx)
+			defer ctrl.Close()
 
-			return nil
+			// <-time.After(time.Second * 10)
 
-			// svc := service.NewGrpc(ctx, c.String("name"))
-			// defer svc.Close()
-
-			// if monitorPort := c.Int("monitor-port"); monitorPort > 0 {
-			// 	mux := http.NewServeMux()
-			// 	monitoring.WithMetrics(mux)
-			// 	monitoring.WithProfiling(mux)
-			// 	monitoring.WithHealthCheck(mux, func() []error {
-			// 		err := ctx.Err()
-			// 		if err != nil {
-			// 			return []error{err}
+			// if cfg.Pubsub != nil {
+			// 	if err := ctrl.Subscribe(ctx, "test-1"); err != nil {
+			// 		lggr.Errorw("could not subscribe to topic", "topic", "test-1", "err", err)
+			// 	}
+			// 	for i := 0; i < 10; i++ {
+			// 		<-time.After(time.Second * 5)
+			// 		if err := ctrl.Publish(ctx, "test-1", []byte(fmt.Sprintf("test-data-%d-%s", i, ctrl.ID()))); err != nil {
+			// 			lggr.Errorw("could not subscribe to topic", "topic", "test-1", "err", err)
 			// 		}
-			// 		return nil
-			// 	})
-			// 	go func() {
-			// 		err := http.ListenAndServe(fmt.Sprintf(":%d", monitorPort), mux)
-			// 		if err != nil {
-			// 			panic(err)
-			// 		}
-			// 	}()
+			// 	}
 			// }
 
-			// s := svc.GrpcServer()
-			// return service.ListenGrpc(s, c.Int("grpc-port"))
+			return grpcapi.ListenGrpc(srv, c.Int("grpc-port"))
+
 		},
 		Commands: []cli.Command{},
 	}

@@ -64,6 +64,17 @@ func (c *Controller) ID() string {
 	return c.host.ID().String()
 }
 
+func (c *Controller) RefreshRouters(msgHandler func(*MsgWrapper[error]), valHandler func(*MsgWrapper[pubsub.ValidationResult])) {
+	if c.valRouter != nil {
+		c.valRouter.RefreshHandler(valHandler)
+		c.threadControl.Go(c.valRouter.Start)
+	}
+	if c.msgRouter != nil {
+		c.msgRouter.RefreshHandler(msgHandler)
+		c.threadControl.Go(c.msgRouter.Start)
+	}
+}
+
 func (c *Controller) Start(ctx context.Context) {
 	c.StartOnce(func() {
 		// d.lggr.Debugf("starting controller with host %s", d.host.ID())

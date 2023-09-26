@@ -80,7 +80,7 @@ func (c *Controller) Publish(ctx context.Context, topicName string, data []byte)
 		return err
 	}
 	// d.lggr.Debugw("publishing on topic", "topic", topicName, "data", string(data))
-	return topic.Publish(ctx, data)
+	return topic.Publish(ctx, data, pubsub.WithLocalPublication(false))
 }
 
 func (c *Controller) Leave(topicName string) error {
@@ -99,12 +99,13 @@ func (c *Controller) Leave(topicName string) error {
 	return nil
 }
 
-func (c *Controller) Unsubscribe(topicName string) {
+func (c *Controller) Unsubscribe(topicName string) error {
 	tw := c.manager.getTopicWrapper(topicName)
-	if tw.state.Load() != topicStateUnknown {
-		return
+	if tw.state.Load() == topicStateUnknown {
+		return nil // TODO: topic not found?
 	}
 	tw.sub.Cancel()
+	return nil
 }
 
 func (c *Controller) Subscribe(ctx context.Context, topicName string) error {
