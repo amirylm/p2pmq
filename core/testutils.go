@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ import (
 )
 
 func SetupTestControllers(ctx context.Context, t *testing.T, n int, routingFn func(*pubsub.Message), valFn func(peer.ID, *pubsub.Message) pubsub.ValidationResult) ([]*Controller, []MsgRouter[error], []MsgRouter[pubsub.ValidationResult], func()) {
-	bootAddr := "/ip4/127.0.0.1/tcp/5001"
+	bootAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", 5000+rand.Intn(1000))
 	boot, err := NewController(ctx, commons.Config{
 		ListenAddrs: []string{
 			bootAddr,

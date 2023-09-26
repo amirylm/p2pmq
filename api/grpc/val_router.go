@@ -113,7 +113,7 @@ func newValidationResults() *validationResults {
 
 func (vr *validationResults) cancel(mid string) {
 	vr.resultsLock.Lock()
-	vr.resultsLock.Unlock()
+	defer vr.resultsLock.Unlock()
 
 	_, ok := vr.results[mid]
 	if ok {
