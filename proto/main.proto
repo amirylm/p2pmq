@@ -4,8 +4,19 @@ option go_package = "github.com/amirylm/p2pmq/proto";
 
 package proto;
 
-service Broadcast {
-    rpc Publish(PublishRequest) returns (PublishResponse);
+
+service ControlService {
+    rpc Publish(PublishRequest) returns (PublishResponse); 
+    rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
+    rpc Unsubscribe(SubscribeRequest) returns (SubscribeResponse);
+}
+    
+service MsgRouter { 
+    rpc Listen(ListenRequest) returns (stream Message) {}
+}
+
+service ValidationRouter { 
+    rpc Handle(stream ValidatedMessage) returns (stream Message) {}
 }
 
 message PublishRequest {
@@ -17,14 +28,15 @@ message PublishResponse {
     string message_id = 1;
 }
 
-service MsgValidation {
-    rpc Listen(stream Message) returns (stream ValidatedMessage) {}
+message SubscribeRequest {
+    string topic = 1;
 }
 
-service Subscriptions {
-    rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
-    rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeResponse);
-    rpc Listen(ListenRequest) returns (stream Message) {}
+message SubscribeResponse {}
+
+message ListenRequest {
+    repeated string topics = 1;
+    int64 max_rate = 2;
 }
 
 message Message {
@@ -45,21 +57,5 @@ message ValidatedMessage {
     Message msg = 2;
 }
 
-message ListenRequest {
-    repeated string topics = 1;
-    int64 max_rate = 2;
-}
 
-message SubscribeRequest {
-    string topic = 1;
-}
 
-message SubscribeResponse {
-    string subscription_id = 1;
-}
-
-message UnsubscribeRequest {
-    string subscription_id = 1;
-}
-
-message UnsubscribeResponse {}
