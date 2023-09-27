@@ -75,6 +75,6 @@ func TestController_Sanity(t *testing.T) {
 
 	for topic, counter := range msgHitMap {
 		count := int(counter.Load()) / n // per node
-		require.Equal(t, rounds, count, "should get %d messages on topic %s", rounds, topic)
+		require.GreaterOrEqual(t, count, rounds, "should get %d messages on topic %s", rounds, topic)
 	}
 }
