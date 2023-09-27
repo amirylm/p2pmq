@@ -47,9 +47,10 @@ message Message {
 }
 
 enum ValidationResult {
-   ACCEPT = 0; 
-   IGNORE = 1;
-   REJECT = 2;
+    NIL = 0;
+   ACCEPT = 1; 
+   IGNORE = 2;
+   REJECT = 3;
 }
 
 message ValidatedMessage {
