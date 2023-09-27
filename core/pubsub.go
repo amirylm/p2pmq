@@ -80,7 +80,7 @@ func (c *Controller) Publish(ctx context.Context, topicName string, data []byte)
 		return err
 	}
 	// d.lggr.Debugw("publishing on topic", "topic", topicName, "data", string(data))
-	return topic.Publish(ctx, data, pubsub.WithLocalPublication(false))
+	return topic.Publish(ctx, data)
 }
 
 func (c *Controller) Leave(topicName string) error {
@@ -145,6 +145,9 @@ func (c *Controller) listenSubscription(ctx context.Context, sub *pubsub.Subscri
 		if msg == nil {
 			continue
 		}
+		// if msg.ReceivedFrom == c.host.ID() {
+		// 	continue
+		// }
 		if err := c.msgRouter.Handle(ctx, msg.ReceivedFrom, msg); err != nil {
 			if ctx.Err() != nil {
 				return

@@ -59,12 +59,7 @@ func SetupTestControllers(ctx context.Context, t *testing.T, n int, routingFn fu
 				},
 			},
 			Pubsub: &commons.PubsubConfig{
-				Topics: []commons.TopicConfig{
-					{
-						Name:         "test-1",
-						MsgValidator: &commons.MsgValidationConfig{},
-					},
-				},
+				MsgValidator: &commons.MsgValidationConfig{},
 			},
 		}
 		msgRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[error]) {

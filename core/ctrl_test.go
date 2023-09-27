@@ -64,7 +64,7 @@ func TestController_Sanity(t *testing.T) {
 			wg.Add(1)
 			go func(c *Controller, r, i int) {
 				defer wg.Done()
-				require.NoError(t, c.Publish(ctx, fmt.Sprintf("test-%d", i+1), []byte(fmt.Sprintf("round-%d-test-data-%d", r+1, i+1))))
+				require.NoError(t, c.Publish(ctx, fmt.Sprintf("test-%d", i+1), []byte(fmt.Sprintf("r-%d-test-data-%d", r+1, i+1))))
 			}(d, r, i)
 		}
 	}

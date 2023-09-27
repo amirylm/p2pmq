@@ -22,14 +22,12 @@ import (
 	"github.com/amirylm/p2pmq/proto"
 )
 
-func TestGrpc_Network(t *testing.T) {
-	// t.Skip()
-
+func TestGrpc_LocalNetwork(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	n := 4
-	rounds := 5
+	n := 10
+	rounds := n
 
 	require.NoError(t, logging.SetLogLevelRegex("p2pmq", "debug"))
 
@@ -107,12 +105,12 @@ func TestGrpc_Network(t *testing.T) {
 				}
 				require.NoError(t, err)
 				valHitMap[msg.GetTopic()].Add(1)
-				if len(msg.Data) > 48 {
+				if len(msg.GetData()) > 48 {
 					require.NoError(t, valClient.Send(&proto.ValidatedMessage{
 						Result: proto.ValidationResult_REJECT,
 						Msg:    msg,
 					}))
-				} else if len(msg.Data) > 32 {
+				} else if len(msg.GetData()) > 32 {
 					require.NoError(t, valClient.Send(&proto.ValidatedMessage{
 						Result: proto.ValidationResult_IGNORE,
 						Msg:    msg,
@@ -142,7 +140,7 @@ func TestGrpc_Network(t *testing.T) {
 				}
 				require.NoError(t, err)
 				msgHitMap[msg.GetTopic()].Add(1)
-				require.LessOrEqualf(t, len(msg.Data), 32, "should see only valid messages: %s", msg.Data)
+				require.LessOrEqualf(t, len(msg.GetData()), 32, "should see only valid messages: %s", msg.Data)
 			}
 		})
 	}
@@ -164,7 +162,7 @@ func TestGrpc_Network(t *testing.T) {
 	wg.Wait()
 
 	<-time.After(time.Second * 5) // TODO: avoid timeout
-	t.Log("Publishing")
+	t.Log("Publishing valid messages")
 	for r := 0; r < rounds; r++ {
 		for i := range grpcServers {
 			control := proto.NewControlServiceClient(conns[i])
@@ -185,44 +183,45 @@ func TestGrpc_Network(t *testing.T) {
 	}
 	wg.Wait()
 
-	// // invalid messages
-	// for i := range grpcServers {
-	// 	control := proto.NewControlServiceClient(conns[i])
-	// 	data := []byte(fmt.Sprintf("%d-test-data-%d", rand.Int31n(1e3), i+1))
-	// 	for len(data)+1 < 48 {
-	// 		data = append(data, []byte(fmt.Sprintf("%d", 1e5+rand.Int31n(1e9)))...)
-	// 	}
-	// 	req := &proto.PublishRequest{
-	// 		Topic: fmt.Sprintf("test-%d", i+1),
-	// 		Data:  data,
-	// 	}
-	// 	wg.Add(1)
-	// 	go func() {
-	// 		defer wg.Done()
-	// 		_, _ = control.Publish(ctx, req)
-	// 	}()
-	// }
+	t.Log("Publishing invalid messages")
+	for i := range grpcServers {
+		control := proto.NewControlServiceClient(conns[i])
+		data := []byte(fmt.Sprintf("%d-test-data-%d", rand.Int31n(1e3), i+1))
+		for len(data)+1 <= 48 {
+			data = append(data, []byte(fmt.Sprintf("%d", 1e5+rand.Int31n(1e9)))...)
+		}
+		req := &proto.PublishRequest{
+			Topic: fmt.Sprintf("test-%d", i+1),
+			Data:  data,
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = control.Publish(ctx, req)
+		}()
+	}
+	wg.Wait()
 
-	// // ignored messages
-	// for i := range grpcServers {
-	// 	control := proto.NewControlServiceClient(conns[i])
-	// 	data := []byte(fmt.Sprintf("%d-test-data-%d", rand.Int31n(1e3), i+1))
-	// 	for len(data)+1 < 32 {
-	// 		data = append(data, []byte(fmt.Sprintf("%d", rand.Int31n(1e3)))...)
-	// 	}
-	// 	req := &proto.PublishRequest{
-	// 		Topic: fmt.Sprintf("test-%d", i+1),
-	// 		Data:  data,
-	// 	}
-	// 	wg.Add(1)
-	// 	go func() {
-	// 		defer wg.Done()
-	// 		_, _ = control.Publish(ctx, req)
-	// 	}()
-	// }
-	// wg.Wait()
+	t.Log("Publishing ignored messages")
+	for i := range grpcServers {
+		control := proto.NewControlServiceClient(conns[i])
+		data := []byte(fmt.Sprintf("%d-test-data-%d", rand.Int31n(1e3), i+1))
+		for len(data)+1 <= 32 {
+			data = append(data, []byte(fmt.Sprintf("%d", rand.Int31n(1e4)))...)
+		}
+		req := &proto.PublishRequest{
+			Topic: fmt.Sprintf("test-%d", i+1),
+			Data:  data,
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = control.Publish(ctx, req)
+		}()
+	}
+	wg.Wait()
 
-	<-time.After(time.Second * 2) // TODO: avoid timeout
+	<-time.After(time.Second * 5) // TODO: avoid timeout
 
 	for _, s := range grpcServers {
 		s.Stop()
@@ -232,6 +231,7 @@ func TestGrpc_Network(t *testing.T) {
 	for topic, counter := range msgHitMap {
 		count := int(counter.Load()) / n // per node
 		require.GreaterOrEqual(t, count, rounds, "should get at least %d messages on topic %s", rounds, topic)
+		require.LessOrEqual(t, count, rounds+1, "should get at most %d messages on topic %s", rounds, topic)
 	}
 }
 
