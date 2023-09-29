@@ -1,4 +1,4 @@
-package tests
+package donsimple
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	grpcapi "github.com/amirylm/p2pmq/api/grpc"
-	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/core"
 	logging "github.com/ipfs/go-log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -49,8 +48,11 @@ func TestCrossDONCommunication(t *testing.T) {
 			reportsInterval: time.Second * 1,
 		},
 		"mercury": {
-			nodes:           4,
-			dons:            1,
+			nodes: 4,
+			dons:  1,
+			subscribed: []string{
+				"test",
+			},
 			reportsInterval: time.Second * 2,
 		},
 		"transmit": {
@@ -96,9 +98,6 @@ func TestCrossDONCommunication(t *testing.T) {
 		grpcServers[i] = grpcapi.NewGrpcServer(control, msgR, valR)
 	}
 
-	threadC := utils.NewThreadControl()
-	defer threadC.Close()
-
 	addrs := make([]string, n)
 	nodes := make([]*nodeClient, n)
 	for i, s := range grpcServers {
@@ -107,14 +106,20 @@ func TestCrossDONCommunication(t *testing.T) {
 			port := randPort()
 			addrs[i] = fmt.Sprintf(":%d", port)
 			nodes[i] = newNodeClient(fmt.Sprintf(":%d", port))
-			threadC.Go(func(ctx context.Context) {
+			go func() {
 				err := grpcapi.ListenGrpc(srv, port)
 				if ctx.Err() == nil {
 					require.NoError(t, err)
 				}
-			})
+			}()
 		}
 	}
+	defer func() {
+		for _, s := range grpcServers {
+			s.Stop()
+		}
+		t.Log("grpc servers stopped")
+	}()
 
 	<-time.After(time.Second * 5) // TODO: avoid timeout
 
@@ -149,30 +154,39 @@ func TestCrossDONCommunication(t *testing.T) {
 		"test":     int(testDuration) / int(donsCfg["test"].reportsInterval),
 	}
 
+checkLoop:
 	for ctx.Err() == nil {
-		<-time.After(time.Second * 5)
+		<-time.After(testDuration / 4)
 		for did, exp := range expectedReports {
 			instances := dons[did]
 			for _, don := range instances {
 				reportsCount := don.reportsCount()
-				for reportsCount < exp && ctx.Err() == nil {
+				for reportsCount+1 < exp && ctx.Err() == nil {
 					time.Sleep(time.Second)
 					reportsCount = don.reportsCount()
 				}
-			}
-			if ctx.Err() == nil {
-				t.Logf("DON %s reports count: %d", did, expectedReports[did])
-				// we have enough reports for this don
-				expectedReports[did] = 0
+				if ctx.Err() == nil {
+					t.Logf("DON %s reports count: %d", did, expectedReports[did])
+					// we have enough reports for this don
+					expectedReports[did] = 0
+				}
 			}
 		}
+		for _, exp := range expectedReports {
+			if exp != 0 {
+				continue checkLoop
+			}
+		}
+		break
 	}
 
-	// <-time.After(testDuration + testDuration/4)
+	<-time.After(testDuration / 4)
 
 	for did, exp := range expectedReports {
 		require.Equal(t, 0, exp, "DON %s reports count", did)
 	}
+	t.Log("done")
+	cancel()
 }
 
 func getRandomNodes(n int, items []*nodeClient) []*nodeClient {

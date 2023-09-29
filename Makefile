@@ -13,13 +13,16 @@ fmt:
 	@go fmt ./...
 
 test:
-	@go test -v -race -timeout=${TEST_TIMEOUT} `go list ./... | grep -v -E "cmd|scripts|resources"`
+	@go test -v -race -timeout=${TEST_TIMEOUT} `go list ./... | grep -v -E "cmd|scripts|resources|examples"`
+
+test-examples:
+	@make TEST_PKG=./examples/... test-pkg
 
 test-pkg:
 	@go test -v -race -timeout=${TEST_TIMEOUT} ${TEST_PKG}
 
 test-cov:
-	@go test -v -race -timeout=${TEST_TIMEOUT} -coverprofile cover.out `go list ./... | grep -v -E "cmd|scripts|resources"`
+	@go test -v -race -timeout=${TEST_TIMEOUT} -coverprofile cover.out `go list ./... | grep -v -E "cmd|scripts|resources|examples"`
 
 test-open-cov:
 	@make test-cov

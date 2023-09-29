@@ -110,8 +110,8 @@ func (c *Controller) Start(ctx context.Context) {
 
 func (c *Controller) Close() {
 	c.StopOnce(func() {
+		c.lggr.Debugf("closing controller with host %s", c.host.ID())
 		c.threadControl.Close()
-		// d.lggr.Debugf("closing controller with host %s", d.host.ID())
 		if c.dht != nil {
 			if err := c.dht.Close(); err != nil {
 				c.lggr.Errorf("failed to close DHT: %w", err)

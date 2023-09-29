@@ -1,4 +1,4 @@
-package tests
+package donsimple
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ func (rb *reportsBuffer) addReport(don string, sr MockedSignedReport) bool {
 	}
 	buf := rb.reports[don]
 	if len(buf) == 0 {
-		buf = make([]MockedSignedReport, 0, rb.bufferSize)
+		buf = make([]MockedSignedReport, rb.bufferSize)
 	}
 	i := sr.SeqNumber % int64(rb.bufferSize)
 	// update only if newer than existing report in buffer

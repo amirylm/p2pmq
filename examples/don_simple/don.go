@@ -1,8 +1,9 @@
-package tests
+package donsimple
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,9 @@ func (d *mockedDon) run(interval time.Duration, subscribedDONs ...string) {
 			}
 			d.threadControl.Go(func(c context.Context) {
 				if err := node.subscribe(c, subscribedDONs...); err != nil {
+					if strings.Contains(err.Error(), "already tring to join") {
+						return
+					}
 					panic(err)
 				}
 			})
@@ -93,9 +97,10 @@ func (d *mockedDon) nextReport() *MockedSignedReport {
 
 func (d *mockedDon) broadcast(r *MockedSignedReport) {
 	for _, n := range d.nodes {
-		n.reports.addReport(d.id, *r)
+		node := n
+		node.reports.addReport(d.id, *r)
 		d.threadControl.Go(func(ctx context.Context) {
-			conn, err := n.connect(true)
+			conn, err := node.connect(false)
 			if err != nil {
 				return
 			}

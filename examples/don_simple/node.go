@@ -1,4 +1,4 @@
-package tests
+package donsimple
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func newNodeClient(grpcAddr string) *nodeClient {
 }
 
 func (n *nodeClient) subscribe(ctx context.Context, dons ...string) error {
-	conn, err := n.connect(true)
+	conn, err := n.connect(false)
 	if err != nil {
 		return err
 	}

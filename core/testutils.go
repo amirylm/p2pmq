@@ -85,7 +85,7 @@ func SetupTestControllers(ctx context.Context, t *testing.T, n int, routingFn fu
 	waitControllersConnected(n)
 
 	return controllers, msgRouters, valRouters, func() {
-		boot.Close()
+		go boot.Close() // closing bootstrapper in the background
 		for _, c := range controllers {
 			c.Close()
 		}
