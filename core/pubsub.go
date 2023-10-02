@@ -217,7 +217,9 @@ func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription
 func (c *Controller) validateMsg(ctx context.Context, p peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	res, err := c.valRouter.HandleWait(ctx, p, msg)
 	if err != nil {
-		c.lggr.Warnw("failed to handle msg", "err", err)
+		if ctx.Err() == nil {
+			c.lggr.Warnw("failed to handle msg", "err", err)
+		}
 		return pubsub.ValidationIgnore
 	}
 	return res
