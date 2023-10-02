@@ -62,13 +62,7 @@ func (d *mockedDon) run(interval time.Duration, subscribedDONs ...string) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				next := d.nextReport()
-
-				d.lock.Lock()
-				d.reports = append(d.reports, *next)
-				d.lock.Unlock()
-
-				d.broadcast(next)
+				d.broadcast(d.nextReport())
 			}
 		}
 	})
