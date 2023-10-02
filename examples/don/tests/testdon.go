@@ -1,4 +1,4 @@
-package donsimple
+package tests
 
 import (
 	"context"
@@ -8,24 +8,29 @@ import (
 	"time"
 
 	"github.com/amirylm/p2pmq/commons/utils"
-	"github.com/amirylm/p2pmq/proto"
+	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 )
 
 type mockedDon struct {
-	// DON ID
-	id      string
-	nodes   []*nodeClient
-	reports []MockedSignedReport
-
 	lock          sync.RWMutex
 	threadControl utils.ThreadControl
+	// DON ID
+	id      string
+	nodes   []*donlib.Node
+	reports []donlib.MockedSignedReport
+
+	signer donlib.Signer
 }
 
-func newDon(id string, nodes ...*nodeClient) *mockedDon {
+func newMockedDon(id string, signer donlib.Signer, nodes ...*donlib.Node) *mockedDon {
+	if signer == nil {
+		signer = &donlib.Sha256Signer{}
+	}
 	return &mockedDon{
 		id:            id,
 		nodes:         nodes,
 		threadControl: utils.NewThreadControl(),
+		signer:        signer,
 	}
 }
 
@@ -41,20 +46,13 @@ func (d *mockedDon) run(interval time.Duration, subscribedDONs ...string) {
 				continue
 			}
 			d.threadControl.Go(func(c context.Context) {
-				if err := node.subscribe(c, subscribedDONs...); err != nil {
+				node.Start()
+			})
+			d.threadControl.Go(func(ctx context.Context) {
+				if err := node.Consumer.Subscribe(ctx, subscribedDONs...); err != nil {
 					if strings.Contains(err.Error(), "already tring to join") {
 						return
 					}
-					panic(err)
-				}
-			})
-			d.threadControl.Go(func(c context.Context) {
-				if err := node.listen(c); err != nil {
-					panic(err)
-				}
-			})
-			d.threadControl.Go(func(c context.Context) {
-				if err := node.validate(c); err != nil {
 					panic(err)
 				}
 			})
@@ -64,7 +62,13 @@ func (d *mockedDon) run(interval time.Duration, subscribedDONs ...string) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				d.broadcast(d.nextReport())
+				next := d.nextReport()
+
+				d.lock.Lock()
+				d.reports = append(d.reports, *next)
+				d.lock.Unlock()
+
+				d.broadcast(next)
 			}
 		}
 	})
@@ -81,7 +85,7 @@ func (d *mockedDon) reportsCount() int {
 	return len(d.reports)
 }
 
-func (d *mockedDon) nextReport() *MockedSignedReport {
+func (d *mockedDon) nextReport() *donlib.MockedSignedReport {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -90,29 +94,31 @@ func (d *mockedDon) nextReport() *MockedSignedReport {
 		lastReport := d.reports[len(d.reports)-1]
 		lastSeq = lastReport.SeqNumber
 	}
-	r := newSignedReport(lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
+	r, err := donlib.NewMockedSignedReport(d.signer, lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
+	if err != nil {
+		panic(err)
+	}
 	d.reports = append(d.reports, *r)
 	return r
 }
 
-func (d *mockedDon) broadcast(r *MockedSignedReport) {
+func (d *mockedDon) broadcast(r *donlib.MockedSignedReport) {
 	for _, n := range d.nodes {
 		node := n
-		node.reports.addReport(d.id, *r)
 		d.threadControl.Go(func(ctx context.Context) {
-			conn, err := node.connect(false)
-			if err != nil {
+			if err := d.signer.Verify(r.Sig, nil, r.GetReportData()); err != nil {
+				if strings.Contains(err.Error(), "validation ignored") {
+					return
+				}
+				fmt.Printf("failed to verify report on don %s: %s\n", d.id, err)
 				return
 			}
-			data, err := MarshalReport(r)
-			if err != nil {
-				return
+			if err := node.Transmitter.Transmit(ctx, r, d.id); err != nil {
+				if strings.Contains(err.Error(), "validation ignored") || ctx.Err() != nil {
+					return
+				}
+				fmt.Printf("failed to publish report on don %s: %s\n", d.id, err)
 			}
-			controlClient := proto.NewControlServiceClient(conn)
-			_, err = controlClient.Publish(ctx, &proto.PublishRequest{
-				Topic: fmt.Sprintf("don.%s", d.id),
-				Data:  data,
-			})
 		})
 	}
 }
