@@ -213,6 +213,7 @@ func TestGrpc_LocalNetwork(t *testing.T) {
 			Topic: fmt.Sprintf("test-%d", i+1),
 			Data:  data,
 		}
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			_, _ = control.Publish(ctx, req)
