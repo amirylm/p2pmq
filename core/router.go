@@ -78,7 +78,6 @@ func (r *msgRouter[T]) Start(pctx context.Context) {
 			}
 			r.dispatchMsg(msg)
 		case <-ctx.Done():
-			close(r.q)
 			return
 		}
 	}
