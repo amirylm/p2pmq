@@ -70,11 +70,11 @@ func (rb *ReportBuffer) GetLatest(don string) *MockedSignedReport {
 		return nil
 	}
 
-	var latest *MockedSignedReport
+	var latest MockedSignedReport
 	for _, r := range buf {
-		if latest == nil || r.SeqNumber > latest.SeqNumber {
-			latest = &r
+		if r.SeqNumber > latest.SeqNumber {
+			latest = r
 		}
 	}
-	return latest
+	return &latest
 }
