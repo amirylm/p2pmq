@@ -6,6 +6,7 @@ import (
 
 	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/proto"
+	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
 var (
@@ -93,7 +94,7 @@ func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
 		// bad encoding
 		return raw, proto.ValidationResult_REJECT
 	}
-	err = v.signer.Verify(r.Sig, nil, r.GetReportData())
+	err = v.signer.Verify(nil, ocrtypes.ReportContext{}, r.GetReportData(), r.Sig)
 	if err != nil {
 		return raw, proto.ValidationResult_REJECT
 	}

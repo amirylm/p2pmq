@@ -3,6 +3,8 @@ package donlib
 import (
 	"encoding/json"
 	"fmt"
+
+	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
 func NewMockedSignedReport(signer Signer, seqNumber int64, srcDON string, data []byte) (*MockedSignedReport, error) {
@@ -11,7 +13,7 @@ func NewMockedSignedReport(signer Signer, seqNumber int64, srcDON string, data [
 		Src:       srcDON,
 		Data:      data,
 	}
-	sig, err := signer.Sign([]byte(fmt.Sprintf("%+v", sr)))
+	sig, err := signer.Sign(ocrtypes.ReportContext{}, []byte(fmt.Sprintf("%+v", sr)))
 	if err != nil {
 		return nil, err
 	}

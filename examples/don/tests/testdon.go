@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/amirylm/p2pmq/commons/utils"
+	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
+
 	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 )
 
@@ -100,7 +102,7 @@ func (d *mockedDon) broadcast(r *donlib.MockedSignedReport) {
 	for _, n := range d.nodes {
 		node := n
 		d.threadControl.Go(func(ctx context.Context) {
-			if err := d.signer.Verify(r.Sig, nil, r.GetReportData()); err != nil {
+			if err := d.signer.Verify(nil, ocrtypes.ReportContext{}, r.GetReportData(), r.Sig); err != nil {
 				if strings.Contains(err.Error(), "validation ignored") {
 					return
 				}
