@@ -13,20 +13,27 @@ func NewMockedSignedReport(signer Signer, seqNumber int64, srcDON string, data [
 		Src:       srcDON,
 		Data:      data,
 	}
-	sig, err := signer.Sign(ocrtypes.ReportContext{}, []byte(fmt.Sprintf("%+v", sr)))
+	rctx := ocrtypes.ReportContext{
+		ReportTimestamp: ocrtypes.ReportTimestamp{
+			ConfigDigest: ocrtypes.ConfigDigest{},
+		},
+	}
+	sig, err := signer.Sign(rctx, []byte(fmt.Sprintf("%+v", sr)))
 	if err != nil {
 		return nil, err
 	}
 	sr.Sig = sig
+	sr.Ctx = rctx
 	return sr, nil
 }
 
 type MockedSignedReport struct {
-	SeqNumber int64
 	// Src DON
-	Src  string
-	Data []byte
-	Sig  []byte
+	Src       string
+	SeqNumber int64
+	Data      []byte
+	Sig       []byte
+	Ctx       ocrtypes.ReportContext
 }
 
 func (r *MockedSignedReport) GetReportData() []byte {

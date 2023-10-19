@@ -6,6 +6,7 @@ import (
 
 	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/proto"
+	"github.com/smartcontractkit/libocr/commontypes"
 	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
@@ -25,15 +26,15 @@ type verifier struct {
 	threadCtrl utils.ThreadControl
 	grpc       GrpcEndPoint
 	reports    *ReportBuffer
-	signer     Signer
+	dons       map[string]map[commontypes.OracleID]ocrtypes.OnchainPublicKey
 }
 
-func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint, signer Signer) Verifier {
+func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint) Verifier {
 	return &verifier{
 		threadCtrl: utils.NewThreadControl(),
 		grpc:       grpc,
 		reports:    reports,
-		signer:     signer,
+		dons:       make(map[string]map[commontypes.OracleID]ocrtypes.OnchainPublicKey),
 	}
 }
 
@@ -94,9 +95,15 @@ func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
 		// bad encoding
 		return raw, proto.ValidationResult_REJECT
 	}
-	err = v.signer.Verify(nil, ocrtypes.ReportContext{}, r.GetReportData(), r.Sig)
-	if err != nil {
-		return raw, proto.ValidationResult_REJECT
+	pubkeys, ok := v.dons[r.Src]
+	if !ok {
+		return raw, proto.ValidationResult_IGNORE
+	}
+	s := NewSigner()
+	for _, pk := range pubkeys {
+		if err := s.Verify(pk, r.Ctx, r.GetReportData(), r.Sig); err != nil {
+			return raw, proto.ValidationResult_REJECT
+		}
 	}
 
 	return raw, v.validateSequence(r)

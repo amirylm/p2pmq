@@ -11,7 +11,7 @@ func TestVerifier_validateSequence(t *testing.T) {
 	n := 100
 	rb := NewReportBuffer(n)
 	signer := &Sha256Signer{}
-	v := NewVerifier(rb, "", signer)
+	v := NewVerifier(rb, "")
 
 	missing := map[int]bool{
 		n - 5: true,

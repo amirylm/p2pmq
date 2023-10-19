@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/amirylm/p2pmq/commons/utils"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 
 	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 )
@@ -20,19 +19,19 @@ type mockedDon struct {
 	id      string
 	nodes   []*donlib.Node
 	reports []donlib.MockedSignedReport
-
-	signer donlib.Signer
 }
 
 func newMockedDon(id string, signer donlib.Signer, nodes ...*donlib.Node) *mockedDon {
-	if signer == nil {
-		signer = &donlib.Sha256Signer{}
+	for _, n := range nodes {
+		if signer == nil {
+			signer = donlib.NewSigner()
+		}
+		n.Signers[id] = signer
 	}
 	return &mockedDon{
 		id:            id,
 		nodes:         nodes,
 		threadControl: utils.NewThreadControl(),
-		signer:        signer,
 	}
 }
 
@@ -90,7 +89,8 @@ func (d *mockedDon) nextReport() *donlib.MockedSignedReport {
 		lastReport := d.reports[len(d.reports)-1]
 		lastSeq = lastReport.SeqNumber
 	}
-	r, err := donlib.NewMockedSignedReport(d.signer, lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
+	// TODO: pass the ocr signers
+	r, err := donlib.NewMockedSignedReport(&donlib.Sha256Signer{}, lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
 	if err != nil {
 		panic(err)
 	}
@@ -102,13 +102,13 @@ func (d *mockedDon) broadcast(r *donlib.MockedSignedReport) {
 	for _, n := range d.nodes {
 		node := n
 		d.threadControl.Go(func(ctx context.Context) {
-			if err := d.signer.Verify(nil, ocrtypes.ReportContext{}, r.GetReportData(), r.Sig); err != nil {
-				if strings.Contains(err.Error(), "validation ignored") {
-					return
-				}
-				fmt.Printf("failed to verify report on don %s: %s\n", d.id, err)
-				return
-			}
+			// if err := d.signer.Verify(nil, r.Ctx, r.GetReportData(), r.Sig); err != nil {
+			// 	if strings.Contains(err.Error(), "validation ignored") {
+			// 		return
+			// 	}
+			// 	fmt.Printf("failed to verify report on don %s: %s\n", d.id, err)
+			// 	return
+			// }
 			if err := node.Transmitter.Transmit(ctx, r, d.id); err != nil {
 				if strings.Contains(err.Error(), "validation ignored") || ctx.Err() != nil {
 					return
