@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amirylm/p2pmq/commons/utils"
+	"github.com/smartcontractkit/libocr/commontypes"
 
 	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 )
@@ -22,9 +23,9 @@ type mockedDon struct {
 }
 
 func newMockedDon(id string, signer donlib.Signer, nodes ...*donlib.Node) *mockedDon {
-	for _, n := range nodes {
+	for i, n := range nodes {
 		if signer == nil {
-			signer = donlib.NewSigner()
+			signer = donlib.NewSigner(commontypes.OracleID(i))
 		}
 		n.Signers[id] = signer
 	}
@@ -33,6 +34,15 @@ func newMockedDon(id string, signer donlib.Signer, nodes ...*donlib.Node) *mocke
 		nodes:         nodes,
 		threadControl: utils.NewThreadControl(),
 	}
+}
+
+func (d *mockedDon) Signers() map[commontypes.OracleID]donlib.Signer {
+	signers := map[commontypes.OracleID]donlib.Signer{}
+	for _, n := range d.nodes {
+		s := n.Signers[d.id]
+		signers[s.OracleID()] = s
+	}
+	return signers
 }
 
 func (d *mockedDon) run(interval time.Duration, subscribedDONs ...string) {
@@ -89,8 +99,8 @@ func (d *mockedDon) nextReport() *donlib.MockedSignedReport {
 		lastReport := d.reports[len(d.reports)-1]
 		lastSeq = lastReport.SeqNumber
 	}
-	// TODO: pass the ocr signers
-	r, err := donlib.NewMockedSignedReport(&donlib.Sha256Signer{}, lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
+
+	r, err := donlib.NewMockedSignedReport(d.Signers(), lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
 	if err != nil {
 		panic(err)
 	}

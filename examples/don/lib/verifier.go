@@ -99,11 +99,29 @@ func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
 	if !ok {
 		return raw, proto.ValidationResult_IGNORE
 	}
-	s := NewSigner()
-	for _, pk := range pubkeys {
-		if err := s.Verify(pk, r.Ctx, r.GetReportData(), r.Sig); err != nil {
+
+	s := NewSigner(0)
+
+	valid := 0
+	for oid, pk := range pubkeys {
+		sig, ok := r.Sigs[oid]
+		if !ok {
+			continue
+		}
+		if err := s.Verify(pk, r.Ctx, r.GetReportData(), sig); err != nil {
 			return raw, proto.ValidationResult_REJECT
 		}
+		valid++
+	}
+
+	// n = 3f + 1
+	// n-1 = 3f
+	// f = (n-1)/3
+	n := len(pubkeys)
+	f := (n - 1) / 3
+	threshold := n - f
+	if valid < threshold {
+		return raw, proto.ValidationResult_REJECT
 	}
 
 	return raw, v.validateSequence(r)

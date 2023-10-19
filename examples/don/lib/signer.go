@@ -5,16 +5,22 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"github.com/smartcontractkit/libocr/commontypes"
 	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
 type Signer interface {
+	OracleID() commontypes.OracleID
 	Sign(reportCtx ocrtypes.ReportContext, report []byte) ([]byte, error)
 	Verify(pubKey ocrtypes.OnchainPublicKey, reportCtx ocrtypes.ReportContext, report, signed []byte) error
 }
 
 // Sha256Signer is a mocked signer that uses `sha256(data)` as signature.
 type Sha256Signer struct{}
+
+func (s *Sha256Signer) OracleID() commontypes.OracleID {
+	return 0
+}
 
 func (s *Sha256Signer) Sign(_ ocrtypes.ReportContext, report []byte) ([]byte, error) {
 	h := sha256.Sum256(report)

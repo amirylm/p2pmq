@@ -7,14 +7,15 @@ import (
 	"testing"
 	"time"
 
-	grpcapi "github.com/amirylm/p2pmq/api/grpc"
-	"github.com/amirylm/p2pmq/core"
-	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 	logging "github.com/ipfs/go-log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
+	grpcapi "github.com/amirylm/p2pmq/api/grpc"
+	"github.com/amirylm/p2pmq/core"
+	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 )
 
 type donConfig struct {

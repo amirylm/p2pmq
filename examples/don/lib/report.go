@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/smartcontractkit/libocr/commontypes"
 	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
-func NewMockedSignedReport(signer Signer, seqNumber int64, srcDON string, data []byte) (*MockedSignedReport, error) {
+func NewMockedSignedReport(signers map[commontypes.OracleID]Signer, seqNumber int64, srcDON string, data []byte) (*MockedSignedReport, error) {
 	sr := &MockedSignedReport{
 		SeqNumber: seqNumber,
 		Src:       srcDON,
@@ -18,11 +19,16 @@ func NewMockedSignedReport(signer Signer, seqNumber int64, srcDON string, data [
 			ConfigDigest: ocrtypes.ConfigDigest{},
 		},
 	}
-	sig, err := signer.Sign(rctx, []byte(fmt.Sprintf("%+v", sr)))
-	if err != nil {
-		return nil, err
+
+	sr.Sigs = make(map[commontypes.OracleID][]byte)
+	for oid, s := range signers {
+		sig, err := s.Sign(rctx, []byte(fmt.Sprintf("%+v", sr)))
+		if err != nil {
+			return nil, err
+		}
+		sr.Sigs[oid] = sig
 	}
-	sr.Sig = sig
+
 	sr.Ctx = rctx
 	return sr, nil
 }
@@ -32,7 +38,7 @@ type MockedSignedReport struct {
 	Src       string
 	SeqNumber int64
 	Data      []byte
-	Sig       []byte
+	Sigs      map[commontypes.OracleID][]byte
 	Ctx       ocrtypes.ReportContext
 }
 
