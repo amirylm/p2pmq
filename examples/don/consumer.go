@@ -1,4 +1,4 @@
-package donlib
+package don
 
 import (
 	"context"

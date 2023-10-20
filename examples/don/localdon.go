@@ -1,4 +1,4 @@
-package tests
+package don
 
 import (
 	"context"
@@ -8,9 +8,6 @@ import (
 	"time"
 
 	"github.com/amirylm/p2pmq/commons/utils"
-	"github.com/smartcontractkit/libocr/commontypes"
-
-	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 )
 
 type mockedDon struct {
@@ -18,14 +15,14 @@ type mockedDon struct {
 	threadControl utils.ThreadControl
 	// DON ID
 	id      string
-	nodes   []*donlib.Node
-	reports []donlib.MockedSignedReport
+	nodes   []*Node
+	reports []MockedSignedReport
 }
 
-func newMockedDon(id string, signer donlib.Signer, nodes ...*donlib.Node) *mockedDon {
+func newMockedDon(id string, signer Signer, nodes ...*Node) *mockedDon {
 	for i, n := range nodes {
 		if signer == nil {
-			signer = donlib.NewSigner(commontypes.OracleID(i))
+			signer = NewSigner(OracleID(i))
 		}
 		n.Signers[id] = signer
 	}
@@ -36,8 +33,8 @@ func newMockedDon(id string, signer donlib.Signer, nodes ...*donlib.Node) *mocke
 	}
 }
 
-func (d *mockedDon) Signers() map[commontypes.OracleID]donlib.Signer {
-	signers := map[commontypes.OracleID]donlib.Signer{}
+func (d *mockedDon) Signers() map[OracleID]Signer {
+	signers := map[OracleID]Signer{}
 	for _, n := range d.nodes {
 		s := n.Signers[d.id]
 		signers[s.OracleID()] = s
@@ -90,7 +87,7 @@ func (d *mockedDon) reportsCount() int {
 	return len(d.reports)
 }
 
-func (d *mockedDon) nextReport() *donlib.MockedSignedReport {
+func (d *mockedDon) nextReport() *MockedSignedReport {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -100,7 +97,7 @@ func (d *mockedDon) nextReport() *donlib.MockedSignedReport {
 		lastSeq = lastReport.SeqNumber
 	}
 
-	r, err := donlib.NewMockedSignedReport(d.Signers(), lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
+	r, err := NewMockedSignedReport(d.Signers(), lastSeq+1, d.id, []byte(fmt.Sprintf("dummy report #%d", lastSeq+1)))
 	if err != nil {
 		panic(err)
 	}
@@ -108,7 +105,7 @@ func (d *mockedDon) nextReport() *donlib.MockedSignedReport {
 	return r
 }
 
-func (d *mockedDon) broadcast(r *donlib.MockedSignedReport) {
+func (d *mockedDon) broadcast(r *MockedSignedReport) {
 	for _, n := range d.nodes {
 		node := n
 		d.threadControl.Go(func(ctx context.Context) {

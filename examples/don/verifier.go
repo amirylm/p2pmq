@@ -1,13 +1,12 @@
-package donlib
+package don
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/proto"
-	"github.com/smartcontractkit/libocr/commontypes"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
 var (
@@ -26,7 +25,7 @@ type verifier struct {
 	threadCtrl utils.ThreadControl
 	grpc       GrpcEndPoint
 	reports    *ReportBuffer
-	dons       map[string]map[commontypes.OracleID]ocrtypes.OnchainPublicKey
+	dons       map[string]map[OracleID]OnchainPublicKey
 }
 
 func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint) Verifier {
@@ -34,7 +33,7 @@ func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint) Verifier {
 		threadCtrl: utils.NewThreadControl(),
 		grpc:       grpc,
 		reports:    reports,
-		dons:       make(map[string]map[commontypes.OracleID]ocrtypes.OnchainPublicKey),
+		dons:       make(map[string]map[OracleID]OnchainPublicKey),
 	}
 }
 
@@ -109,6 +108,7 @@ func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
 			continue
 		}
 		if err := s.Verify(pk, r.Ctx, r.GetReportData(), sig); err != nil {
+			fmt.Printf("failed to verify report: %v\n", err)
 			return raw, proto.ValidationResult_REJECT
 		}
 		valid++

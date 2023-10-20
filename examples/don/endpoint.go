@@ -1,4 +1,4 @@
-package donlib
+package don
 
 import (
 	"google.golang.org/grpc"

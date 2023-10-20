@@ -1,26 +1,23 @@
-package donlib
+package don
 
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/smartcontractkit/libocr/commontypes"
-	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
-func NewMockedSignedReport(signers map[commontypes.OracleID]Signer, seqNumber int64, srcDON string, data []byte) (*MockedSignedReport, error) {
+func NewMockedSignedReport(signers map[OracleID]Signer, seqNumber int64, srcDON string, data []byte) (*MockedSignedReport, error) {
 	sr := &MockedSignedReport{
 		SeqNumber: seqNumber,
 		Src:       srcDON,
 		Data:      data,
 	}
-	rctx := ocrtypes.ReportContext{
-		ReportTimestamp: ocrtypes.ReportTimestamp{
-			ConfigDigest: ocrtypes.ConfigDigest{},
+	rctx := ReportContext{
+		ReportTimestamp: ReportTimestamp{
+			ConfigDigest: ConfigDigest{},
 		},
 	}
 
-	sr.Sigs = make(map[commontypes.OracleID][]byte)
+	sr.Sigs = make(map[OracleID][]byte)
 	for oid, s := range signers {
 		sig, err := s.Sign(rctx, []byte(fmt.Sprintf("%+v", sr)))
 		if err != nil {
@@ -38,8 +35,8 @@ type MockedSignedReport struct {
 	Src       string
 	SeqNumber int64
 	Data      []byte
-	Sigs      map[commontypes.OracleID][]byte
-	Ctx       ocrtypes.ReportContext
+	Sigs      map[OracleID][]byte
+	Ctx       ReportContext
 }
 
 func (r *MockedSignedReport) GetReportData() []byte {

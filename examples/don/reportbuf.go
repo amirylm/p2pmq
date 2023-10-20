@@ -1,4 +1,4 @@
-package donlib
+package don
 
 import (
 	"sync"
@@ -62,7 +62,7 @@ func (rb *ReportBuffer) GetLatest(don string) *MockedSignedReport {
 	rb.lock.RLock()
 	defer rb.lock.RUnlock()
 
-	if rb.reports == nil {
+	if len(rb.reports) == 0 {
 		return nil
 	}
 	buf := rb.reports[don]
