@@ -67,7 +67,7 @@ func (d *mockedDon) run(interval time.Duration, subscribedDONs ...string) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				d.broadcast(d.nextReport())
+				d.broadcast(ctx, d.nextReport())
 			}
 		}
 	})
@@ -102,7 +102,7 @@ func (d *mockedDon) nextReport() *MockedSignedReport {
 	return r
 }
 
-func (d *mockedDon) broadcast(r *MockedSignedReport) {
+func (d *mockedDon) broadcast(pctx context.Context, r *MockedSignedReport) {
 	for _, n := range d.nodes {
 		node := n
 		d.threadControl.Go(func(ctx context.Context) {
@@ -114,7 +114,7 @@ func (d *mockedDon) broadcast(r *MockedSignedReport) {
 			// 	return
 			// }
 			if err := node.Transmitter.Transmit(ctx, r, d.id); err != nil {
-				if strings.Contains(err.Error(), "validation ignored") || ctx.Err() != nil {
+				if strings.Contains(err.Error(), "validation ignored") || ctx.Err() != nil || pctx.Err() != nil {
 					return
 				}
 				fmt.Printf("failed to publish report on don %s: %s\n", d.id, err)
