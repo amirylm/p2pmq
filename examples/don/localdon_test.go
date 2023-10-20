@@ -1,4 +1,4 @@
-package tests
+package don
 
 import (
 	"context"
@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	grpcapi "github.com/amirylm/p2pmq/api/grpc"
-	"github.com/amirylm/p2pmq/core"
-	donlib "github.com/amirylm/p2pmq/examples/don/lib"
 	logging "github.com/ipfs/go-log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
+	grpcapi "github.com/amirylm/p2pmq/api/grpc"
+	"github.com/amirylm/p2pmq/core"
 )
 
 type donConfig struct {
@@ -100,13 +100,13 @@ func TestCrossDONCommunication(t *testing.T) {
 	}
 
 	addrs := make([]string, n)
-	nodes := make([]*donlib.Node, n)
+	nodes := make([]*Node, n)
 	for i, s := range grpcServers {
 		{
 			srv := s
 			port := randPort()
 			addrs[i] = fmt.Sprintf(":%d", port)
-			nodes[i] = donlib.NewNode(donlib.GrpcEndPoint(fmt.Sprintf(":%d", port)))
+			nodes[i] = NewNode(GrpcEndPoint(fmt.Sprintf(":%d", port)))
 			go func() {
 				err := grpcapi.ListenGrpc(srv, port)
 				if ctx.Err() == nil {
@@ -128,7 +128,7 @@ func TestCrossDONCommunication(t *testing.T) {
 	for did, cfg := range donsCfg {
 		for j := 0; j < cfg.dons; j++ {
 			donNodes := getRandomNodes(cfg.nodes, nodes)
-			don := newMockedDon(did, nil, donNodes...)
+			don := newMockedDon(did, donNodes...)
 			dons[did] = append(dons[did], don)
 		}
 	}
@@ -191,12 +191,12 @@ checkLoop:
 	done()
 }
 
-func getRandomNodes(n int, items []*donlib.Node) []*donlib.Node {
+func getRandomNodes(n int, items []*Node) []*Node {
 	if n > len(items) {
 		n = len(items)
 	}
 	visited := map[int]bool{}
-	randoms := make([]*donlib.Node, 0)
+	randoms := make([]*Node, 0)
 	for len(randoms) < n {
 		r := rand.Intn(len(items))
 		if visited[r] {

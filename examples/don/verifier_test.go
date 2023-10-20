@@ -1,4 +1,4 @@
-package donlib
+package don
 
 import (
 	"testing"
@@ -10,8 +10,8 @@ import (
 func TestVerifier_validateSequence(t *testing.T) {
 	n := 100
 	rb := NewReportBuffer(n)
-	signer := &Sha256Signer{}
-	v := NewVerifier(rb, "", signer)
+
+	v := NewVerifier(rb, "")
 
 	missing := map[int]bool{
 		n - 5: true,
@@ -63,7 +63,8 @@ func TestVerifier_validateSequence(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := NewMockedSignedReport(signer, tc.seq, tc.don, tc.data)
+			// TODO: fix
+			r, err := NewMockedSignedReport(nil, tc.seq, tc.don, tc.data)
 			require.NoError(t, err)
 			require.Equal(t, tc.res, v.(*verifier).validateSequence(r))
 		})

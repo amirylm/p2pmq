@@ -1,4 +1,4 @@
-package donlib
+package don
 
 import (
 	"testing"
@@ -31,9 +31,6 @@ func TestReportBuffer_GetLatest(t *testing.T) {
 			require.True(t, rb.Add(testDon, MockedSignedReport{SeqNumber: int64(i + 1)}))
 		}
 		require.True(t, rb.Add(testDon, MockedSignedReport{SeqNumber: int64(n + 1)}))
-		rb.lock.Lock()
-		t.Logf("buffer: %+v", rb.reports[testDon])
-		rb.lock.Unlock()
 
 		latest := rb.GetLatest(testDon)
 		require.NotNil(t, latest)

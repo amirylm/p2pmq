@@ -1,4 +1,4 @@
-package donlib
+package don
 
 import (
 	"context"
@@ -16,7 +16,7 @@ type Node struct {
 	Transmitter OverlayTrasnmitter
 	Consumer    MsgConsumer
 	Verifier    Verifier
-	Signer      Signer
+	Signers     map[string]Signer
 }
 
 func NewNode(grpc GrpcEndPoint, opts ...NodeOpt) *Node {
@@ -33,8 +33,8 @@ func NewNode(grpc GrpcEndPoint, opts ...NodeOpt) *Node {
 
 		Transmitter: NewOverlayTransmitter(grpc, nodeOpts.reportManipulator),
 		Consumer:    NewMsgConsumer(reports, grpc),
-		Verifier:    NewVerifier(reports, grpc, nodeOpts.signer),
-		Signer:      nodeOpts.signer,
+		Verifier:    NewVerifier(reports, grpc),
+		Signers:     map[string]Signer{},
 	}
 }
 
@@ -71,7 +71,6 @@ func defaultNodeOpts() *nodeOpts {
 	return &nodeOpts{
 		reportManipulator: func(*MockedSignedReport) {},
 		bufferSize:        1024,
-		signer:            &Sha256Signer{},
 	}
 }
 

@@ -215,6 +215,10 @@ func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription
 }
 
 func (c *Controller) validateMsg(ctx context.Context, p peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+	if p.String() == c.host.ID().String() {
+		// accept own messages
+		return pubsub.ValidationAccept
+	}
 	res, err := c.valRouter.HandleWait(ctx, p, msg)
 	if err != nil {
 		if ctx.Err() == nil {

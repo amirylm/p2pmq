@@ -1,7 +1,8 @@
-package donlib
+package don
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/amirylm/p2pmq/commons/utils"
@@ -24,15 +25,15 @@ type verifier struct {
 	threadCtrl utils.ThreadControl
 	grpc       GrpcEndPoint
 	reports    *ReportBuffer
-	signer     Signer
+	dons       map[string]map[OracleID]OnchainPublicKey
 }
 
-func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint, signer Signer) Verifier {
+func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint) Verifier {
 	return &verifier{
 		threadCtrl: utils.NewThreadControl(),
 		grpc:       grpc,
 		reports:    reports,
-		signer:     signer,
+		dons:       make(map[string]map[OracleID]OnchainPublicKey),
 	}
 }
 
@@ -93,8 +94,33 @@ func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
 		// bad encoding
 		return raw, proto.ValidationResult_REJECT
 	}
-	err = v.signer.Verify(r.Sig, nil, r.GetReportData())
-	if err != nil {
+	pubkeys, ok := v.dons[r.Src]
+	if !ok {
+		return raw, proto.ValidationResult_IGNORE
+	}
+
+	s := NewSigner(0)
+
+	valid := 0
+	for oid, pk := range pubkeys {
+		sig, ok := r.Sigs[oid]
+		if !ok {
+			continue
+		}
+		if err := s.Verify(pk, r.Ctx, r.GetReportData(), sig); err != nil {
+			fmt.Printf("failed to verify report: %v\n", err)
+			return raw, proto.ValidationResult_REJECT
+		}
+		valid++
+	}
+
+	// n = 3f + 1
+	// n-1 = 3f
+	// f = (n-1)/3
+	n := len(pubkeys)
+	f := (n - 1) / 3
+	threshold := n - f
+	if valid < threshold {
 		return raw, proto.ValidationResult_REJECT
 	}
 

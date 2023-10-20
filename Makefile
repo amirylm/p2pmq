@@ -15,8 +15,8 @@ fmt:
 test:
 	@go test -v -race -timeout=${TEST_TIMEOUT} `go list ./... | grep -v -E "cmd|scripts|resources|examples|proto"`
 
-test-examples:
-	@make TEST_PKG=./examples/... test-pkg
+test-localdon:
+	@make TEST_PKG=./examples/don/... test-pkg
 
 test-pkg:
 	@go test -v -race -timeout=${TEST_TIMEOUT} ${TEST_PKG}
