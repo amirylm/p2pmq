@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+// NOTE: was copied from github.com/smartcontractkit/libocr
+
 // OracleID is an index over the oracles, used as a succinct attribution to an
 // oracle in communication with the on-chain contract. It is not a cryptographic
 // commitment to the oracle's private key, like a public key is.

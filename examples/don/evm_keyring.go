@@ -12,6 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
+// NOTE: was copied from github.com/smartcontractkit/libocr
+
 var curve = secp256k1.S256()
 
 func RawReportContext(repctx ReportContext) [3][32]byte {
