@@ -164,7 +164,7 @@ func TestGrpc_LocalNetwork(t *testing.T) {
 
 	<-time.After(time.Second * 5) // TODO: avoid timeout
 	t.Log("Publishing valid messages")
-	for r := 0; r < rounds; r++ {
+	for r := 0; r <= rounds; r++ {
 		for i := range grpcServers {
 			control := proto.NewControlServiceClient(conns[i])
 			req := &proto.PublishRequest{
