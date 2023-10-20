@@ -71,7 +71,6 @@ func defaultNodeOpts() *nodeOpts {
 	return &nodeOpts{
 		reportManipulator: func(*MockedSignedReport) {},
 		bufferSize:        1024,
-		signer:            &Sha256Signer{},
 	}
 }
 

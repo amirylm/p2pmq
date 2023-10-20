@@ -19,12 +19,9 @@ type mockedDon struct {
 	reports []MockedSignedReport
 }
 
-func newMockedDon(id string, signer Signer, nodes ...*Node) *mockedDon {
+func newMockedDon(id string, nodes ...*Node) *mockedDon {
 	for i, n := range nodes {
-		if signer == nil {
-			signer = NewSigner(OracleID(i))
-		}
-		n.Signers[id] = signer
+		n.Signers[id] = NewSigner(OracleID(i))
 	}
 	return &mockedDon{
 		id:            id,

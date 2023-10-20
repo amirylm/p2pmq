@@ -5,7 +5,12 @@ import (
 	"fmt"
 )
 
-// OcrSigner is a mocked signer that uses `sha256(data)` as signature.
+type Signer interface {
+	OracleID() OracleID
+	Sign(reportCtx ReportContext, report []byte) ([]byte, error)
+	Verify(pubKey OnchainPublicKey, reportCtx ReportContext, report, signed []byte) error
+}
+
 type OcrSigner struct {
 	k   *EvmKeyring
 	oid OracleID

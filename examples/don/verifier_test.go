@@ -8,7 +8,6 @@ import (
 )
 
 func TestVerifier_validateSequence(t *testing.T) {
-	t.Skip()
 	n := 100
 	rb := NewReportBuffer(n)
 

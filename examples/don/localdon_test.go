@@ -128,7 +128,7 @@ func TestCrossDONCommunication(t *testing.T) {
 	for did, cfg := range donsCfg {
 		for j := 0; j < cfg.dons; j++ {
 			donNodes := getRandomNodes(cfg.nodes, nodes)
-			don := newMockedDon(did, &Sha256Signer{}, donNodes...)
+			don := newMockedDon(did, donNodes...)
 			dons[did] = append(dons[did], don)
 		}
 	}
