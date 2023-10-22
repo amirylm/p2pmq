@@ -47,6 +47,27 @@ func (rb *ReportBuffer) Add(net string, sr SignedReport) bool {
 	return false
 }
 
+func (rb *ReportBuffer) GetAll(net string) []*SignedReport {
+	rb.lock.RLock()
+	defer rb.lock.RUnlock()
+
+	if rb.reports == nil {
+		return nil
+	}
+	buf := rb.reports[net]
+	if len(buf) == 0 {
+		return nil
+	}
+
+	var reports []*SignedReport
+	for _, r := range buf {
+		if r.SeqNumber != 0 {
+			reports = append(reports, &r)
+		}
+	}
+	return reports
+}
+
 func (rb *ReportBuffer) Get(net string, seq uint64) *SignedReport {
 	rb.lock.RLock()
 	defer rb.lock.RUnlock()

@@ -30,7 +30,10 @@ func (share *Share) Validate(sr SignedReport) bool {
 }
 
 func (share *Share) QuorumCount() int {
-	count := len(share.Signers)
+	return Threshold(len(share.Signers))
+}
+
+func Threshold(count int) int {
 	f := (count - 1) / 3
 
 	return count - f

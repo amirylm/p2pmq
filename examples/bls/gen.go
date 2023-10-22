@@ -28,7 +28,7 @@ func GenBlsKey() (*bls.SecretKey, *bls.PublicKey) {
 
 // GenShares receives a bls.SecretKey and desired count.
 // Will split the secret key into count shares
-func GenShares(sk *bls.SecretKey, threshold uint64, count uint64) (map[uint64]*bls.SecretKey, error) {
+func GenShares(sk *bls.SecretKey, threshold uint64, count uint64) (map[uint64]*bls.SecretKey, map[uint64]*bls.PublicKey, error) {
 	msk := make([]bls.SecretKey, threshold)
 	// master key
 	msk[0] = *sk
@@ -41,22 +41,23 @@ func GenShares(sk *bls.SecretKey, threshold uint64, count uint64) (map[uint64]*b
 
 	// evaluate shares - starting from 1 because 0 is master key
 	shares := make(map[uint64]*bls.SecretKey)
+	sharesPK := make(map[uint64]*bls.PublicKey, 0)
 	for i := uint64(1); i <= count; i++ {
 		blsID := bls.ID{}
 
 		err := blsID.SetDecString(fmt.Sprintf("%d", i))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		sk := bls.SecretKey{}
 		err = sk.Set(msk, &blsID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
 		shares[i] = &sk
+		sharesPK[i] = sk.GetPublicKey()
 	}
 
-	return shares, nil
+	return shares, sharesPK, nil
 }

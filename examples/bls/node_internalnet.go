@@ -9,8 +9,8 @@ import (
 	"github.com/herumi/bls-eth-go-binary/bls"
 )
 
-func (n *node) validateInternalNet(sr SignedReport) proto.ValidationResult {
-	share, ok := n.shares.Get(sr.Network)
+func (n *Node) validateInternalNet(sr SignedReport) proto.ValidationResult {
+	share, ok := n.Shares.Get(sr.Network)
 	if !ok { // this node is not a signer in this network, ignore
 		return proto.ValidationResult_IGNORE
 	}
@@ -24,8 +24,8 @@ func (n *node) validateInternalNet(sr SignedReport) proto.ValidationResult {
 	return proto.ValidationResult_ACCEPT
 }
 
-func (n *node) consumeInternalNet(sr SignedReport) error {
-	share, ok := n.shares.Get(sr.Network)
+func (n *Node) consumeInternalNet(sr SignedReport) error {
+	share, ok := n.Shares.Get(sr.Network)
 	if ok {
 		n.threadC.Go(func(ctx context.Context) {
 			reports, ok := n.internalReports.Get(sr.Network)
@@ -69,7 +69,7 @@ func (n *node) consumeInternalNet(sr SignedReport) error {
 	return nil
 }
 
-func (n *node) prepareReport(signatures map[uint64][]byte, sr SignedReport) (SignedReport, error) {
+func (n *Node) prepareReport(signatures map[uint64][]byte, sr SignedReport) (SignedReport, error) {
 	fmt.Printf("Reconstructing signature for network %s, seq %d\n", sr.Network, sr.SeqNumber)
 	sign, err := ReconstructSigs(signatures)
 	if err != nil {
@@ -81,7 +81,7 @@ func (n *node) prepareReport(signatures map[uint64][]byte, sr SignedReport) (Sig
 	return sr, nil
 }
 
-func (n *node) collectSignatures(seq uint64, reports *ReportBuffer, signers ...string) map[uint64][]byte {
+func (n *Node) collectSignatures(seq uint64, reports *ReportBuffer, signers ...string) map[uint64][]byte {
 	signatures := make(map[uint64][]byte)
 	for _, s := range signers {
 		id, err := strconv.ParseUint(s, 10, 64)
@@ -104,15 +104,15 @@ func (n *node) collectSignatures(seq uint64, reports *ReportBuffer, signers ...s
 	return signatures
 }
 
-func (n *node) hasQuorum(sr SignedReport, signers ...string) bool {
+func (n *Node) hasQuorum(sr SignedReport, signers ...string) bool {
 	// count = 3f + 1
 	count := n.quorumCount(sr.Network)
 
 	return len(signers) < count
 }
 
-func (n *node) quorumCount(net string) int {
-	share, ok := n.shares.Get(net)
+func (n *Node) quorumCount(net string) int {
+	share, ok := n.Shares.Get(net)
 	if !ok {
 		return 0
 	}
@@ -120,8 +120,8 @@ func (n *node) quorumCount(net string) int {
 }
 
 // getLeader returns the leader for the given sequence number (round robin).
-func (n *node) getLeader(net string, seq uint64) uint64 {
-	share, ok := n.shares.Get(net)
+func (n *Node) getLeader(net string, seq uint64) uint64 {
+	share, ok := n.Shares.Get(net)
 	if !ok {
 		return 0
 	}
@@ -129,7 +129,7 @@ func (n *node) getLeader(net string, seq uint64) uint64 {
 }
 
 // isProcessable ensures that we sign once and only leaders can trigger a new sequence
-func (n *node) isProcessable(opid, leader string, signers ...string) bool {
+func (n *Node) isProcessable(opid, leader string, signers ...string) bool {
 	var leaderSigned, signed bool
 	for _, signer := range signers {
 		if leader == signer {

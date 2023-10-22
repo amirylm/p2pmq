@@ -10,7 +10,7 @@ import (
 	"github.com/herumi/bls-eth-go-binary/bls"
 )
 
-type node struct {
+type Node struct {
 	utils.StartStopOnce
 	threadC utils.ThreadControl
 
@@ -20,19 +20,20 @@ type node struct {
 	grpc     client.GrpcEndPoint
 	verifier client.Verifier
 	consumer client.Consumer
-	// shares is a map of network to the share that is used for that network
-	shares *store[Share]
+	// Shares holds a map of network to the share that is used
+	// by this node for that network
+	Shares *store[Share]
 	// internalReports is a map of network to the reports that are received before quorum is reached
 	internalReports *store[*ReportBuffer]
 }
 
-func NewNode(grpc client.GrpcEndPoint, pubstore *store[*bls.PublicKey]) *node {
-	n := &node{
+func NewNode(grpc client.GrpcEndPoint, pubstore *store[*bls.PublicKey]) *Node {
+	n := &Node{
 		threadC:         utils.NewThreadControl(),
 		reports:         NewReportBuffer(reportBufferSize),
 		pubstore:        pubstore,
 		grpc:            grpc,
-		shares:          NewStore[Share](),
+		Shares:          NewStore[Share](),
 		internalReports: NewStore[*ReportBuffer](),
 	}
 
@@ -42,7 +43,7 @@ func NewNode(grpc client.GrpcEndPoint, pubstore *store[*bls.PublicKey]) *node {
 	return n
 }
 
-func (n *node) Start() {
+func (n *Node) Start() {
 	n.StartOnce(func() {
 		n.threadC.Go(func(ctx context.Context) {
 			err := n.verifier.Start(ctx)
@@ -59,7 +60,7 @@ func (n *node) Start() {
 	})
 }
 
-func (n *node) Close() {
+func (n *Node) Close() {
 	n.StopOnce(func() {
 		n.verifier.Stop()
 		n.consumer.Stop()
@@ -67,7 +68,7 @@ func (n *node) Close() {
 	})
 }
 
-func (n *node) Consume(msg *proto.Message) error {
+func (n *Node) Consume(msg *proto.Message) error {
 	sr, err := UnmarshalSignedReport(msg.GetData())
 	if err != nil || sr == nil {
 		return err
@@ -84,7 +85,7 @@ func (n *node) Consume(msg *proto.Message) error {
 	return nil
 }
 
-func (n *node) Validate(msg *proto.Message) proto.ValidationResult {
+func (n *Node) Validate(msg *proto.Message) proto.ValidationResult {
 	pubkey, ok := n.pubstore.Get(msg.GetTopic())
 	if !ok {
 		return proto.ValidationResult_IGNORE
@@ -111,7 +112,7 @@ func (n *node) Validate(msg *proto.Message) proto.ValidationResult {
 	return n.reports.ValidateSequence(*sr)
 }
 
-func (n *node) Broadcast(ctx context.Context, report SignedReport) error {
+func (n *Node) Broadcast(ctx context.Context, report SignedReport) error {
 	conn, err := n.grpc.Connect()
 	if err != nil {
 		return err
@@ -128,9 +129,9 @@ func (n *node) Broadcast(ctx context.Context, report SignedReport) error {
 	return err
 }
 
-func (n *node) TriggerReport(report SignedReport) {
+func (n *Node) TriggerReport(report SignedReport) {
 	n.threadC.Go(func(ctx context.Context) {
-		share, ok := n.shares.Get(report.Network)
+		share, ok := n.Shares.Get(report.Network)
 		if !ok {
 			return
 		}
