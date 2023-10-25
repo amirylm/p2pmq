@@ -100,7 +100,7 @@ func (n *Node) Validate(msg *proto.Message) proto.ValidationResult {
 		return n.validateInternalNet(*sr)
 	}
 
-	var sign *bls.Sign
+	sign := &bls.Sign{}
 	if err := sign.DeserializeHexStr(sr.SigHex); err != nil {
 		return proto.ValidationResult_REJECT
 	}

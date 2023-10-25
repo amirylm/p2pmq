@@ -33,10 +33,10 @@ func (n *Node) consumeInternalNet(sr SignedReport) error {
 				reports = NewReportBuffer(reportBufferSize)
 				n.internalReports.Add(sr.Network, reports)
 			}
-			signers := reports.Lookup(sr.SeqNumber)
 			if !reports.Add(fmt.Sprintf("%d", sr.SignerID), sr) {
 				return
 			}
+			signers := reports.Lookup(sr.SeqNumber)
 			leader := n.getLeader(sr.Network, sr.SeqNumber)
 			if n.isProcessable(fmt.Sprintf("%d", share.SignerID), fmt.Sprintf("%d", leader), signers...) {
 				share.Sign(&sr)
@@ -48,7 +48,7 @@ func (n *Node) consumeInternalNet(sr SignedReport) error {
 				signers = append(signers, fmt.Sprintf("%d", share.SignerID))
 			}
 			if n.hasQuorum(sr, signers...) {
-				fmt.Printf("Quorum reached for network %s, seq %d\n", sr.Network, sr.SeqNumber)
+				fmt.Printf("Signer %d: quorum reached for network %s, seq %d (%d signers)\n", share.SignerID, sr.Network, sr.SeqNumber, len(signers))
 				n.threadC.Go(func(ctx context.Context) {
 					signatures := n.collectSignatures(sr.SeqNumber, reports, signers...)
 					if len(signatures) > n.quorumCount(sr.Network) {
@@ -94,7 +94,7 @@ func (n *Node) collectSignatures(seq uint64, reports *ReportBuffer, signers ...s
 			fmt.Printf("Error retrieving report for signer %d\n", id)
 			continue
 		}
-		var sign *bls.Sign
+		sign := &bls.Sign{}
 		if err := sign.DeserializeHexStr(rep.SigHex); err != nil {
 			fmt.Printf("Error deserializing signature: %s\n", err)
 			continue
@@ -108,7 +108,7 @@ func (n *Node) hasQuorum(sr SignedReport, signers ...string) bool {
 	// count = 3f + 1
 	count := n.quorumCount(sr.Network)
 
-	return len(signers) < count
+	return len(signers) >= count
 }
 
 func (n *Node) quorumCount(net string) int {
@@ -125,7 +125,7 @@ func (n *Node) getLeader(net string, seq uint64) uint64 {
 	if !ok {
 		return 0
 	}
-	return seq % uint64(len(share.Signers))
+	return (seq % uint64(len(share.Signers))) + 1
 }
 
 // isProcessable ensures that we sign once and only leaders can trigger a new sequence

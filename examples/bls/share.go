@@ -1,6 +1,10 @@
 package blstest
 
-import "github.com/herumi/bls-eth-go-binary/bls"
+import (
+	"fmt"
+
+	"github.com/herumi/bls-eth-go-binary/bls"
+)
 
 type Share struct {
 	SignerID       uint64
@@ -19,7 +23,8 @@ func (share *Share) Validate(sr SignedReport) bool {
 	if !ok {
 		return false
 	}
-	var sign *bls.Sign
+	fmt.Printf("Signer %d is validating report on network %s with seq %d from %d\n", share.SignerID, sr.Network, sr.SeqNumber, sr.SignerID)
+	sign := &bls.Sign{}
 	if err := sign.DeserializeHexStr(sr.SigHex); err != nil {
 		return false
 	}

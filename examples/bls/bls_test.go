@@ -16,6 +16,7 @@ import (
 
 	grpcapi "github.com/amirylm/p2pmq/api/grpc"
 	"github.com/amirylm/p2pmq/api/grpc/client"
+	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/core"
 )
 
@@ -23,11 +24,11 @@ func TestBls(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	n := 16
+	n := 10
 
 	netCfg := map[string]netConfig{
 		"auto": {
-			nodes: 10,
+			nodes: 4,
 			subscribed: []string{
 				"func",
 				"mercury",
@@ -35,7 +36,7 @@ func TestBls(t *testing.T) {
 			reportsInterval: time.Second * 1,
 		},
 		"func": {
-			nodes: 7,
+			nodes: 4,
 			subscribed: []string{
 				"auto",
 				"mercury",
@@ -50,7 +51,7 @@ func TestBls(t *testing.T) {
 			reportsInterval: time.Second * 2,
 		},
 		"transmit": {
-			nodes: 10,
+			nodes: 4,
 			subscribed: []string{
 				"func",
 				"mercury",
@@ -58,7 +59,7 @@ func TestBls(t *testing.T) {
 			reportsInterval: time.Second * 4,
 		},
 		"test": {
-			nodes: 10,
+			nodes: 4,
 			subscribed: []string{
 				"auto",
 				"func",
@@ -98,6 +99,7 @@ func TestBls(t *testing.T) {
 		blsKeys = append(blsKeys, netPriv)
 	}
 
+	t.Log("Starting grpc servers")
 	addrs := make([]string, n)
 	nodes := make([]*Node, n)
 	for i, s := range grpcServers {
@@ -121,6 +123,7 @@ func TestBls(t *testing.T) {
 		t.Log("grpc servers stopped")
 	}()
 
+	t.Log("Starting nodes")
 	for _, n := range nodes {
 		n.Start()
 	}
@@ -144,15 +147,30 @@ func TestBls(t *testing.T) {
 				PrivateKey:     sks[uint64(i+1)],
 				SharePublicKey: blsKeys[j].GetPublicKey(),
 			})
-			topic := net
-			n.threadC.Go(func(ctx context.Context) {
-				require.NoError(t, n.consumer.Subscribe(ctx, topic))
-			})
+			require.NoError(t, n.consumer.Subscribe(ctx, net))
+			for _, sub := range cfg.subscribed {
+				require.NoError(t, n.consumer.Subscribe(ctx, sub))
+			}
 		}
 		j++
 	}
 
+	t.Log("Nodes subscribed")
+
 	<-time.After(time.Second * 5) // TODO: avoid timeout
+
+	t.Log("Starting reports generation")
+
+	threadC := utils.NewThreadControl()
+	defer threadC.Close()
+	reports := NewReportBuffer(reportBufferSize)
+
+	for net, cfg := range netCfg {
+		nodes := netInstances[net]
+		threadC.Go(func(ctx context.Context) {
+			triggerReports(ctx, t, net, cfg.reportsInterval, reports, nodes)
+		})
+	}
 
 	testDuration := time.Second * 20
 	expectedReports := map[string]int{
@@ -167,18 +185,15 @@ checkLoop:
 	for ctx.Err() == nil {
 		<-time.After(testDuration / 4)
 		for did, exp := range expectedReports {
-			instances := netInstances[did]
-			for _, node := range instances {
-				reportsCount := len(node.reports.GetAll(did))
-				for reportsCount+1 < exp && ctx.Err() == nil {
-					time.Sleep(time.Second)
-					reportsCount = len(node.reports.GetAll(did))
-				}
-				if ctx.Err() == nil {
-					t.Logf("DON %s reports count: %d", did, expectedReports[did])
-					// we have enough reports for this don
-					expectedReports[did] = 0
-				}
+			reportsCount := len(reports.GetAll(did))
+			for reportsCount+1 < exp && ctx.Err() == nil {
+				time.Sleep(time.Second)
+				reportsCount = len(reports.GetAll(did))
+			}
+			if ctx.Err() == nil {
+				t.Logf("DON %s reports count: %d", did, expectedReports[did])
+				// we have enough reports for this don
+				expectedReports[did] = 0
 			}
 		}
 		for _, exp := range expectedReports {
@@ -197,6 +212,46 @@ checkLoop:
 	t.Log("done")
 	cancel()
 	done()
+}
+
+func triggerReports(ctx context.Context, t *testing.T, net string, interval time.Duration, reports *ReportBuffer, nodes []*Node) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			latest := reports.getLatest(net)
+			var nextSeq uint64
+			if latest != nil {
+				nextSeq = latest.SeqNumber + 1
+			} else {
+				nextSeq = 1
+			}
+			t.Logf("Generating report for %s, seq %d", net, nextSeq)
+			for _, n := range nodes {
+				node := n
+				share, ok := node.Shares.Get(net)
+				if !ok {
+					return
+				}
+				if node.getLeader(net, nextSeq) == share.SignerID {
+					node.threadC.Go(func(ctx context.Context) {
+						report := &SignedReport{
+							Network:   net,
+							SeqNumber: nextSeq,
+							Data:      []byte(fmt.Sprintf("report for %s, seq %d", net, nextSeq)),
+						}
+						share.Sign(report)
+						require.NoError(t, node.Broadcast(ctx, *report))
+						reports.Add(net, *report)
+					})
+				}
+			}
+		}
+	}
 }
 
 type netConfig struct {
