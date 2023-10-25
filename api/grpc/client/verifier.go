@@ -72,7 +72,8 @@ func (v *verifier) Start(ctx context.Context) error {
 				Result: v.Process(next),
 				Msg:    next,
 			}
-			routerClient.Send(res)
+			// TODO: handle error
+			_ = routerClient.Send(res)
 		}
 	}
 }
