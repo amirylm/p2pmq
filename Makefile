@@ -18,6 +18,9 @@ test:
 test-localdon:
 	@make TEST_PKG=./examples/don/... test-pkg
 
+test-bls:
+	@go test -v -tags blst_enabled -timeout=${TEST_TIMEOUT} ./examples/bls/...
+
 test-pkg:
 	@go test -v -race -timeout=${TEST_TIMEOUT} ${TEST_PKG}
 
