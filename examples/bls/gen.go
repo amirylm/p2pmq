@@ -11,8 +11,8 @@ var (
 	curveOrder = new(big.Int)
 )
 
-// Init initializes BLS
-func Init() {
+// init initializes BLS
+func init() {
 	_ = bls.Init(bls.BLS12_381)
 	_ = bls.SetETHmode(bls.EthModeDraft07)
 
