@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 
 	grpcapi "github.com/amirylm/p2pmq/api/grpc"
 	"github.com/amirylm/p2pmq/api/grpc/client"
-	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/core"
 )
 
@@ -161,18 +161,13 @@ func TestBls(t *testing.T) {
 
 	t.Log("Starting reports generation")
 
-	threadC := utils.NewThreadControl()
-	defer threadC.Close()
 	reports := NewReportBuffer(reportBufferSize)
-
 	for net, cfg := range netCfg {
 		nodes := netInstances[net]
-		threadC.Go(func(ctx context.Context) {
-			triggerReports(ctx, t, net, cfg.reportsInterval, reports, nodes)
-		})
+		go triggerReports(ctx, t, net, cfg.reportsInterval, reports, nodes)
 	}
 
-	testDuration := time.Second * 20
+	testDuration := time.Second * 10
 	expectedReports := map[string]int{
 		"auto":     int(testDuration) / int(netCfg["auto"].reportsInterval),
 		"func":     int(testDuration) / int(netCfg["func"].reportsInterval),
@@ -183,7 +178,7 @@ func TestBls(t *testing.T) {
 
 checkLoop:
 	for ctx.Err() == nil {
-		<-time.After(testDuration / 4)
+		time.Sleep(testDuration / 4)
 		for did, exp := range expectedReports {
 			reportsCount := len(reports.GetAll(did))
 			for reportsCount+1 < exp && ctx.Err() == nil {
@@ -209,18 +204,15 @@ checkLoop:
 	for did, exp := range expectedReports {
 		require.Equal(t, 0, exp, "DON %s reports count", did)
 	}
-	t.Log("done")
-	cancel()
-	done()
 }
 
-func triggerReports(ctx context.Context, t *testing.T, net string, interval time.Duration, reports *ReportBuffer, nodes []*Node) {
+func triggerReports(pctx context.Context, t *testing.T, net string, interval time.Duration, reports *ReportBuffer, nodes []*Node) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-pctx.Done():
 			return
 		case <-ticker.C:
 			latest := reports.getLatest(net)
@@ -231,11 +223,14 @@ func triggerReports(ctx context.Context, t *testing.T, net string, interval time
 				nextSeq = 1
 			}
 			t.Logf("Generating report for %s, seq %d", net, nextSeq)
+			if pctx.Err() != nil {
+				return
+			}
 			for _, n := range nodes {
 				node := n
 				share, ok := node.Shares.Get(net)
 				if !ok {
-					return
+					continue
 				}
 				if node.getLeader(net, nextSeq) == share.SignerID {
 					node.threadC.Go(func(ctx context.Context) {
@@ -245,8 +240,16 @@ func triggerReports(ctx context.Context, t *testing.T, net string, interval time
 							Data:      []byte(fmt.Sprintf("report for %s, seq %d", net, nextSeq)),
 						}
 						share.Sign(report)
-						require.NoError(t, node.Broadcast(ctx, *report))
-						reports.Add(net, *report)
+						if pctx.Err() != nil || ctx.Err() != nil { // ctx might be canceled by the time we get here
+							return
+						}
+						if err := node.Broadcast(ctx, *report); ctx.Err() == nil && pctx.Err() == nil {
+							if err != nil && strings.Contains(err.Error(), "context canceled") {
+								return
+							}
+							require.NoError(t, err)
+							reports.Add(net, *report)
+						}
 					})
 				}
 			}

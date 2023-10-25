@@ -47,13 +47,13 @@ func (n *Node) Start() {
 	n.StartOnce(func() {
 		n.threadC.Go(func(ctx context.Context) {
 			err := n.verifier.Start(ctx)
-			if err != nil {
+			if err != nil && ctx.Err() == nil {
 				panic(err)
 			}
 		})
 		n.threadC.Go(func(ctx context.Context) {
 			err := n.consumer.Start(ctx)
-			if err != nil {
+			if err != nil && ctx.Err() == nil {
 				panic(err)
 			}
 		})
@@ -62,9 +62,9 @@ func (n *Node) Start() {
 
 func (n *Node) Close() {
 	n.StopOnce(func() {
+		n.threadC.Close()
 		n.verifier.Stop()
 		n.consumer.Stop()
-		n.threadC.Close()
 	})
 }
 
