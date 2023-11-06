@@ -1,6 +1,6 @@
 module github.com/amirylm/p2pmq
 
-go 1.20
+go 1.21
 
 require (
 	github.com/ipfs/go-log v1.0.5
@@ -18,7 +18,6 @@ require (
 	github.com/multiformats/go-multiaddr v0.11.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 )
 

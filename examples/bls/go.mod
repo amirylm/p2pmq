@@ -1,6 +1,6 @@
 module github.com/amirylm/p2pmq/examples/bls
 
-go 1.20
+go 1.21
 
 require (
 	github.com/amirylm/p2pmq v0.0.1
