@@ -21,11 +21,12 @@ var (
 )
 
 func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) error {
+	msgID := gossip.MsgIDFn(gossip.MsgIDFuncType(cfg.Pubsub.MsgIDFnConfig.Type), gossip.MsgIDSize(cfg.Pubsub.MsgIDFnConfig.Size))
 	opts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithGossipSubParams(gossip.GossipSubParams(cfg.Pubsub.Overlay)),
-		pubsub.WithMessageIdFn(gossip.MsgIDSha256(20)),
+		pubsub.WithMessageIdFn(msgID),
 	}
 
 	if cfg.Pubsub.Scoring != nil {

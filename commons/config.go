@@ -91,6 +91,7 @@ type PubsubConfig struct {
 	MsgValidationTimeout time.Duration        `json:"msgValidationTimeout,omitempty" yaml:"msgValidationTimeout,omitempty"`
 	Scoring              *ScoringParams       `json:"scoring,omitempty" yaml:"scoring,omitempty"`
 	MsgValidator         *MsgValidationConfig `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
+	MsgIDFnConfig        *MsgIDFnConfig       `json:"msgIDFn,omitempty" yaml:"msgIDFn,omitempty"`
 	Trace                bool                 `json:"trace,omitempty" yaml:"trace,omitempty"`
 }
 
@@ -101,6 +102,11 @@ func (psc PubsubConfig) GetTopicConfig(name string) (TopicConfig, bool) {
 		}
 	}
 	return TopicConfig{}, false
+}
+
+type MsgIDFnConfig struct {
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+	Size int    `json:"size,omitempty" yaml:"size,omitempty"`
 }
 
 type MsgValidationConfig struct {
