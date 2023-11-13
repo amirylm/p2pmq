@@ -134,12 +134,13 @@ func (mvc MsgValidationConfig) Defaults(other *MsgValidationConfig) MsgValidatio
 
 // TopicConfig contains configuration of a pubsub topic
 type TopicConfig struct {
-	Name         string               `json:"name" yaml:"name"`
-	BufferSize   int                  `json:"bufferSize,omitempty" yaml:"bufferSize,omitempty"`
-	RateLimit    float64              `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
-	Overlay      *OverlayParams       `json:"overlay,omitempty" yaml:"overlay,omitempty"`
-	Scoring      *ScoringParams       `json:"scoring,omitempty" yaml:"scoring,omitempty"`
-	MsgValidator *MsgValidationConfig `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
+	Name          string               `json:"name" yaml:"name"`
+	BufferSize    int                  `json:"bufferSize,omitempty" yaml:"bufferSize,omitempty"`
+	RateLimit     float64              `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
+	Overlay       *OverlayParams       `json:"overlay,omitempty" yaml:"overlay,omitempty"`
+	Scoring       *ScoringParams       `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	MsgValidator  *MsgValidationConfig `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
+	MsgIDFnConfig *MsgIDFnConfig       `json:"msgIDFn,omitempty" yaml:"msgIDFn,omitempty"`
 }
 
 // SubscriptionFilter configurations
