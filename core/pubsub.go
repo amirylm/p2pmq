@@ -159,8 +159,14 @@ func (c *Controller) listenSubscription(ctx context.Context, sub *pubsub.Subscri
 }
 
 func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
-	// TODO: apply subscription filter
-
+	opts := []pubsub.TopicOpt{}
+	cfg, ok := c.cfg.Pubsub.GetTopicConfig(topicName)
+	if ok {
+		if cfg.MsgIDFnConfig != nil {
+			msgID := gossip.MsgIDFn(gossip.MsgIDFuncType(cfg.MsgIDFnConfig.Type), gossip.MsgIDSize(cfg.MsgIDFnConfig.Size))
+			opts = append(opts, pubsub.WithTopicMessageIdFn(msgID))
+		}
+	}
 	topicW := c.manager.getTopicWrapper(topicName)
 	if topicW != nil {
 		if topicW.state.Load() == topicStateJoining {
@@ -169,13 +175,12 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 		return topicW.topic, nil
 	}
 	c.manager.joiningTopic(topicName)
-	topic, err := c.pubsub.Join(topicName)
+	topic, err := c.pubsub.Join(topicName, opts...)
 	if err != nil {
 		return nil, err
 	}
 	c.manager.upgradeTopic(topicName, topic)
 
-	cfg, _ := c.cfg.Pubsub.GetTopicConfig(topicName)
 	if cfg.MsgValidator != nil || c.cfg.Pubsub.MsgValidator != nil {
 		msgValConfig := commons.MsgValidationConfig{}.Defaults(c.cfg.Pubsub.MsgValidator)
 		if cfg.MsgValidator != nil {
