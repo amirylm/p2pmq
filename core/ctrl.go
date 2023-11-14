@@ -33,7 +33,7 @@ type Controller struct {
 	mdnsSvc mdns.Service
 	pubsub  *pubsub.PubSub
 
-	manager   pubsubManager
+	psManager pubsubManager
 	denylist  pubsub.Blacklist
 	subFilter pubsub.SubscriptionFilter
 

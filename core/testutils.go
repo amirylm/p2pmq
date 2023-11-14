@@ -64,11 +64,11 @@ func SetupTestControllers(ctx context.Context, t *testing.T, n int, routingFn fu
 		}
 		msgRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[error]) {
 			routingFn(mw.Msg)
-		}, gossip.MsgIDSha256(20))
+		}, gossip.DefaultMsgIDFn)
 		valRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[pubsub.ValidationResult]) {
 			res := valFn(mw.Peer, mw.Msg)
 			mw.Result = res
-		}, gossip.MsgIDSha256(20))
+		}, gossip.DefaultMsgIDFn)
 		c, err := NewController(ctx, cfg, msgRouter, valRouter, fmt.Sprintf("peer-%d", i+1))
 		require.NoError(t, err)
 		controllers[i] = c

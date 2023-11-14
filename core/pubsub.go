@@ -17,20 +17,24 @@ import (
 )
 
 var (
-	inspectInterval = time.Minute
+	peerScoreInspectionInterval = time.Minute
 )
 
 func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) error {
+	msgID := gossip.DefaultMsgIDFn
+	if cfg.Pubsub.MsgIDFnConfig != nil {
+		msgID = gossip.MsgIDFn(gossip.MsgIDFuncType(cfg.Pubsub.MsgIDFnConfig.Type), gossip.MsgIDSize(cfg.Pubsub.MsgIDFnConfig.Size))
+	}
 	opts := []pubsub.Option{
 		pubsub.WithMessageSigning(false),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithGossipSubParams(gossip.GossipSubParams(cfg.Pubsub.Overlay)),
-		pubsub.WithMessageIdFn(gossip.MsgIDSha256(20)),
+		pubsub.WithMessageIdFn(msgID),
 	}
 
 	if cfg.Pubsub.Scoring != nil {
 		opts = append(opts, pubsub.WithPeerScore(gossip.PeerScores(*cfg.Pubsub)))
-		opts = append(opts, pubsub.WithPeerScoreInspect(c.inspectPeerScores, inspectInterval))
+		opts = append(opts, pubsub.WithPeerScoreInspect(c.inspectPeerScores, peerScoreInspectionInterval))
 	}
 
 	if cfg.Pubsub.MaxMessageSize > 0 {
@@ -43,8 +47,6 @@ func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) 
 
 	denylist := pubsub.NewMapBlacklist()
 	opts = append(opts, pubsub.WithBlacklist(denylist))
-
-	// pubsub.WithDefaultValidator() // TODO: check
 
 	if cfg.Pubsub.SubFilter != nil {
 		re, err := regexp.Compile(cfg.Pubsub.SubFilter.Pattern)
@@ -69,7 +71,7 @@ func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) 
 	}
 	c.pubsub = ps
 	c.denylist = denylist
-	c.manager.topics = make(map[string]*topicWrapper)
+	c.psManager.topics = make(map[string]*topicWrapper)
 
 	return nil
 }
@@ -84,7 +86,7 @@ func (c *Controller) Publish(ctx context.Context, topicName string, data []byte)
 }
 
 func (c *Controller) Leave(topicName string) error {
-	tw := c.manager.getTopicWrapper(topicName)
+	tw := c.psManager.getTopicWrapper(topicName)
 	state := tw.state.Load()
 	switch state {
 	case topicStateJoined, topicStateErr:
@@ -100,7 +102,7 @@ func (c *Controller) Leave(topicName string) error {
 }
 
 func (c *Controller) Unsubscribe(topicName string) error {
-	tw := c.manager.getTopicWrapper(topicName)
+	tw := c.psManager.getTopicWrapper(topicName)
 	if tw.state.Load() == topicStateUnknown {
 		return nil // TODO: topic not found?
 	}
@@ -158,23 +160,28 @@ func (c *Controller) listenSubscription(ctx context.Context, sub *pubsub.Subscri
 }
 
 func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
-	// TODO: apply subscription filter
-
-	topicW := c.manager.getTopicWrapper(topicName)
+	topicW := c.psManager.getTopicWrapper(topicName)
 	if topicW != nil {
 		if topicW.state.Load() == topicStateJoining {
 			return nil, fmt.Errorf("already tring to join topic %s", topicName)
 		}
 		return topicW.topic, nil
 	}
-	c.manager.joiningTopic(topicName)
-	topic, err := c.pubsub.Join(topicName)
+	c.psManager.joiningTopic(topicName)
+	opts := []pubsub.TopicOpt{}
+	cfg, ok := c.cfg.Pubsub.GetTopicConfig(topicName)
+	if ok {
+		if cfg.MsgIDFnConfig != nil {
+			msgID := gossip.MsgIDFn(gossip.MsgIDFuncType(cfg.MsgIDFnConfig.Type), gossip.MsgIDSize(cfg.MsgIDFnConfig.Size))
+			opts = append(opts, pubsub.WithTopicMessageIdFn(msgID))
+		}
+	}
+	topic, err := c.pubsub.Join(topicName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	c.manager.upgradeTopic(topicName, topic)
+	c.psManager.upgradeTopic(topicName, topic)
 
-	cfg, _ := c.cfg.Pubsub.GetTopicConfig(topicName)
 	if cfg.MsgValidator != nil || c.cfg.Pubsub.MsgValidator != nil {
 		msgValConfig := commons.MsgValidationConfig{}.Defaults(c.cfg.Pubsub.MsgValidator)
 		if cfg.MsgValidator != nil {
@@ -195,7 +202,7 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 
 func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription, err error) {
 	topicName := topic.String()
-	sub = c.manager.getSub(topicName)
+	sub = c.psManager.getSub(topicName)
 	if sub != nil {
 		return nil, nil
 	}
@@ -210,7 +217,7 @@ func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription
 	if err != nil {
 		return nil, err
 	}
-	c.manager.addSub(topicName, sub)
+	c.psManager.addSub(topicName, sub)
 	return sub, nil
 }
 
