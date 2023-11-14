@@ -102,6 +102,8 @@ type OverlayParams struct {
 type ScoringParams struct {
 	// whether it is allowed to just set some params and not all of them
 	SkipAtomic bool `json:"skipAtomic,omitempty" yaml:"skipAtomic,omitempty"`
+	// thresholds to use for scoring
+	Thresholds *ScoringThresholds `json:"thresholds,omitempty" yaml:"thresholds,omitempty"`
 	// params (P1-P4) per topic
 	Topics map[string]TopicScoreParams `json:"topics,omitempty" yaml:"topics,omitempty"`
 	// Aggregate topic score cap; this limits the total contribution of topics towards a positive
@@ -120,7 +122,27 @@ type ScoringParams struct {
 	BehaviourPenalty *ScoringParamExtended `json:"behaviourPenalty,omitempty" yaml:"behaviourPenalty,omitempty"`
 }
 
-func (sc *ScoringParams) ToStd() *pubsub.PeerScoreParams {
+type ScoringThresholds struct {
+	// whether it is allowed to just set some params and not all of them.
+	SkipAtomic bool `json:"skipAtomic,omitempty" yaml:"skipAtomic,omitempty"`
+	// GossipThreshold is the score threshold below which gossip propagation is suppressed;
+	// should be negative.
+	GossipThreshold float64 `json:"gossip,omitempty" yaml:"gossip,omitempty"`
+	// PublishThreshold is the score threshold below which we shouldn't publish when using flood
+	// publishing (also applies to fanout and floodsub peers); should be negative and <= GossipThreshold.
+	PublishThreshold float64 `json:"publish,omitempty" yaml:"publish,omitempty"`
+	// GraylistThreshold is the score threshold below which message processing is suppressed altogether,
+	// implementing an effective gray list according to peer score; should be negative and <= PublishThreshold.
+	GraylistThreshold float64 `json:"graylist,omitempty" yaml:"graylist,omitempty"`
+	// AcceptPXThreshold is the score threshold below which PX will be ignored; this should be positive
+	// and limited to scores attainable by bootstrappers and other trusted nodes.
+	AcceptPXThreshold float64 `json:"acceptPx,omitempty" yaml:"acceptPx,omitempty"`
+	// OpportunisticGraftThreshold is the median mesh score threshold before triggering opportunistic
+	// grafting; this should have a small positive value.
+	OpportunisticGraftThreshold float64 `json:"opportunisticGraft,omitempty" yaml:"opportunisticGraft,omitempty"`
+}
+
+func (sc *ScoringParams) ToStd() (*pubsub.PeerScoreParams, *pubsub.PeerScoreThresholds) {
 	stdParams := pubsub.PeerScoreParams{
 		SkipAtomicValidation: sc.SkipAtomic,
 		Topics:               make(map[string]*pubsub.TopicScoreParams),
@@ -148,7 +170,18 @@ func (sc *ScoringParams) ToStd() *pubsub.PeerScoreParams {
 		stdParams.BehaviourPenaltyThreshold = p.Threshold
 	}
 
-	return &stdParams
+	stdThresholds := &pubsub.PeerScoreThresholds{}
+
+	if sc.Thresholds != nil {
+		stdThresholds.SkipAtomicValidation = sc.Thresholds.SkipAtomic
+		stdThresholds.GossipThreshold = sc.Thresholds.GossipThreshold
+		stdThresholds.PublishThreshold = sc.Thresholds.PublishThreshold
+		stdThresholds.GraylistThreshold = sc.Thresholds.GraylistThreshold
+		stdThresholds.AcceptPXThreshold = sc.Thresholds.AcceptPXThreshold
+		stdThresholds.OpportunisticGraftThreshold = sc.Thresholds.OpportunisticGraftThreshold
+	}
+
+	return &stdParams, stdThresholds
 }
 
 // TopicScoreParams is used to configure topic scoring.
