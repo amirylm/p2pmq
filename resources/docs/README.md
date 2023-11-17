@@ -68,21 +68,21 @@ Based on validation results, message rate and overall behaviour, peer scoring is
 
 Agents are separate processes running within some parent node, interacting with the parent node via a gRPC API, following [go-plugin](https://github.com/hashicorp/go-plugin) for achieving a modular architecture. 
 
+The following diagram visualize the system:
+
+![arch-node.png](./arch-node.png)
+
 Agents manages libp2p components such as the gossipsub router, which is responsible for message propagation and peer scoring. In addition, the following services runs within the agent:
 
 - **validation router** for message validation and processing
 - **message router** for consuming messages
 - **control service** for managing subscriptions, publishing messages and more.
 
-Within the parent node, the corresponding clients are being used for interacting with the agent.
-
-The following diagram visualize the system architecture:
-
-![arch-node.png](./arch-node.png)
+The node implements verifiers for validating messages, and processors for processing incoming messages from other networks, and broadcasting messages on behalf of the node to other networks.
 
 ### API
 
-Agents exposes a gRPC API for interaction, based on the following services:
+The following gRPC services are used by the clients from within the parent node, for interacting with the agent:
 
 ```protobuf
 service ControlService {
