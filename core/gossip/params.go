@@ -5,34 +5,35 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
-func GossipSubParams(overlayp *commons.OverlayParams) pubsub.GossipSubParams {
+// GossipSubParams returns the default pubsub.GossipSubParams parameters,
+// overriden by the given overlay parameters.
+func GossipSubParams(overlayParams *commons.OverlayParams) pubsub.GossipSubParams {
 	gsCfg := pubsub.DefaultGossipSubParams()
-	var overlay commons.OverlayParams
-	if overlayp != nil {
-		overlay = *overlayp
+	if overlayParams == nil {
+		return gsCfg
 	}
-	if overlay.D > 0 {
-		gsCfg.D = int(overlay.D)
+	if overlayParams.D > 0 {
+		gsCfg.D = int(overlayParams.D)
 	}
-	if overlay.Dlow > 0 {
-		gsCfg.Dlo = int(overlay.Dlow)
+	if overlayParams.Dlow > 0 {
+		gsCfg.Dlo = int(overlayParams.Dlow)
 	}
-	if overlay.Dhi > 0 {
-		gsCfg.Dhi = int(overlay.Dhi)
+	if overlayParams.Dhi > 0 {
+		gsCfg.Dhi = int(overlayParams.Dhi)
 	}
-	if overlay.Dlazy > 0 {
-		gsCfg.Dlazy = int(overlay.Dlazy)
+	if overlayParams.Dlazy > 0 {
+		gsCfg.Dlazy = int(overlayParams.Dlazy)
 	}
-	if overlay.McacheGossip > 0 {
-		gsCfg.MaxIHaveMessages = int(overlay.McacheGossip)
+	if overlayParams.McacheGossip > 0 {
+		gsCfg.MaxIHaveMessages = int(overlayParams.McacheGossip)
 	}
-	if overlay.McacheLen > 0 {
-		gsCfg.MaxIHaveLength = int(overlay.McacheLen)
+	if overlayParams.McacheLen > 0 {
+		gsCfg.MaxIHaveLength = int(overlayParams.McacheLen)
 	}
-	if fanoutTtl := overlay.FanoutTtl; fanoutTtl.Milliseconds() > 0 {
+	if fanoutTtl := overlayParams.FanoutTtl; fanoutTtl.Milliseconds() > 0 {
 		gsCfg.FanoutTTL = fanoutTtl
 	}
-	if heartbeat := overlay.HeartbeatInterval; heartbeat.Milliseconds() > 0 {
+	if heartbeat := overlayParams.HeartbeatInterval; heartbeat.Milliseconds() > 0 {
 		gsCfg.HeartbeatInterval = heartbeat
 	}
 	return gsCfg

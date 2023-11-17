@@ -9,9 +9,10 @@ func PeerScores(cfg commons.PubsubConfig) (*pubsub.PeerScoreParams, *pubsub.Peer
 	peerScores, thresholds := &pubsub.PeerScoreParams{}, &pubsub.PeerScoreThresholds{
 		// TODO: using reasonable defaults, requires tuning
 		SkipAtomicValidation: true,
-		GossipThreshold:      -10000,
+		GossipThreshold:      -4000,
 		PublishThreshold:     -2000,
 		GraylistThreshold:    -400,
+		// OpportunisticGraftThreshold: 10,
 	}
 	if cfg.Scoring != nil {
 		s, t := cfg.Scoring.ToStd()
