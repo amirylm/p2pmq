@@ -102,11 +102,13 @@ service ValidationRouter {
 
 ### Network Topology
 
-Standalone oracles that connects via the engine, forms a global network that is consist of multiple overlay networks, for sharing verifiable data that was originated within the oracles.
+Each network creates an overlay network for outbound traffic (i.e. pubsub topic), where other networks can subscribe for messages.
 
-Each oracle creates an overlay networks (AKA topic) for outbound and inbound traffic, where other oracles can join and subscribe for messages.
+There might be multiple overlay networks for broadcasting messages from the same network, depends on versioning and business logic.
+For instance, in case the encoding of the messages has changed, a new overlay network will be created for the new version, and the old overlay network will be neglected until it is no longer needed or used.
 
-**NOTE:** There might be multiple overlays for broadcasting messages from the same network, depends on versioning and business logic.
+The amount of overlay connections to nodes in other networks might be changed dynamically, depends on the network topology and the amount of nodes in each network.
+Gossipsub allows to configure the amount of peers per topic, while having decent propagation of messages. That property enables to scale the global network to a large amount of nodes, w/o flooding the wires and consuming too much resources.
 
 ### Message Validation
 
@@ -114,9 +116,12 @@ As the validation is outsourced the parent node, we rely on the security propert
 
 **NOTE:** Having validation within the agent introduces complexity and vulnerabilities.
 
-All the messages are propagated through the pipes must be valid, by the following strict rules:
+All the messages are propagated through the pipes must be valid.
+In case of invalid messages, the message will be dropped and the sender, regardless of the message origin, will be penalized by the gossipsub router.
 
-- The message was **signed by a quorum** of oracle-network nodes
+E.g. for an oracle (or other offchain computing) network, messages must comply with the following strict rules:
+
+- The message was **signed by a quorum** of a standalone-network nodes
 - The message has a **sequence number** that match the current order, taking into account potential gaps that might be created due to bad network conditions.
     - Messages that are older than **Validity Threshold** (value TBD) are considered invalid and will result in a low score for the sender, either the origin peer or a gossiper peer
     - Messages that are older than **Skip Threshold** (value TBD) will be ignored w/o affecting sender scores

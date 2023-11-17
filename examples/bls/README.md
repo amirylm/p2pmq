@@ -1,10 +1,9 @@
 # BLS example
 
-This package shows a high level integration with BLS based networks.
+This package shows a high level integration with BLS based networks, using [herumi/bls-eth-go-binary](https://github.com/herumi/bls-eth-go-binary) package for BLS cryptography.
 
 ## Links
 
-- [github.com/herumi/bls-eth-go-binary](https://github.com/herumi/bls-eth-go-binary) is the library used for BLS signatures.
 - [BLS Multi-Signatures With Public-Key Aggregation](https://crypto.stanford.edu/~dabo/pubs/papers/BLSmultisig.html)
 - [BLS Signatures Part 1 — Overview](https://alonmuroch-65570.medium.com/bls-signatures-part-1-overview-47d9eebf1c75)
 - [BLS signatures in Solidity](https://ethresear.ch/t/bls-signatures-in-solidity/7919)
