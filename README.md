@@ -4,13 +4,10 @@
 
 **NOTE: This is an experimental work in progress. DO NOT USE**
 
-## Overview
+## Documentation
 
-**DME** is a distributed, permissionless messaging engine for cross oracle communication.
+The documentation is available at [./resources/docs](./resources/docs).
 
-A network of agents is capable of the following:
-- Broadcast messages over topics with optimal latency
-- Pluggable and decoupled message validation using gRPC
-- Scoring for protection from bad actors
-- Syncing peers with the latest messages to recover from 
-restarts, network partition, etc.
+## Usage
+
+Examples are available at [./examples](./examples).
