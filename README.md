@@ -2,12 +2,12 @@
 
 <br />
 
-**NOTE: This is an experimental work in progress. DO NOT USE**
+**WARNING: This is an experimental work in progress. DO NOT USE**
 
 ## Documentation
 
-The documentation is available at [./resources/docs](./resources/docs).
+You can find documentation in [./resources/docs](./resources/docs).
 
 ## Usage
 
-Examples are available at [./examples](./examples).
+Usage examples are available in the [examples](./examples) folder.

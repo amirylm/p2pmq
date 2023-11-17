@@ -1,10 +1,8 @@
 # Threat Analysis
 
-The idea is to create a robust and secure messaging solution for cross network interoperability, by considering the following threats and the corresponding mitigation strategies:
+In order to create a robust and secure messaging solution for cross network interoperability, the following threats were considered:
 
-## Threats
-
-### Message Spamming
+### 1. Message Spamming
 
 Attackers flood the network with invalid or malicious messages, consuming bandwidth and degrading network performance.
 
@@ -16,7 +14,7 @@ Attackers flood the network with invalid or malicious messages, consuming bandwi
 - Require message validation with cryptographic signatures to ensure message authenticity and integrity
 - Require message sequence validation, where unrealistic sequences are considered invalid. Use caching, where the key is based on content hashing, so the same message won't exhaust resources
 
-### Message Spamming: Validation Queue Flooding
+### 2. Message Spamming: Validation Queue Flooding
 
 Attackers can overload the validation queue by sending spam messages at a very high rate. Legitimate messages get dropped, resulting in a denial of service as messages are ignored.
 
@@ -28,7 +26,7 @@ Attackers can overload the validation queue by sending spam messages at a very h
 Implement a circuit breaker before the validation queue that makes informed decisions based on message origin IP and a probabilistic strategy to drop messages. See [gossipsub v1.1: validation-queue-protection](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/red.md#gossipsub-v11-functional-extension-for-validation-queue-protection).
 
 
-### Censorship Attacks
+### 3. Censorship Attacks
 
 Malicious nodes selectively block messages to suppress certain information. Countermeasures include redundancy and diversification of message propagation paths.
 
@@ -42,7 +40,7 @@ Malicious nodes selectively block messages to suppress certain information. Coun
 - Employ mechanisms to detect and mitigate Sybil nodes, such as peer scoring and validation
 
 
-### Denial of Service (DoS)
+### 4. Denial of Service (DoS)
 
 Adversaries flood the network with malicious traffic or connections to disrupt its operation.
 
@@ -54,7 +52,7 @@ Adversaries flood the network with malicious traffic or connections to disrupt i
 Implement rate limiting, connection policies, and adaptive firewall mechanisms to protect against DoS attacks.
 
 
-### Partition Attacks
+### 5. Partition Attacks
 
 Adversaries attempt to partition the network by disrupting communication between mesh peers.
 
@@ -66,7 +64,7 @@ Adversaries attempt to partition the network by disrupting communication between
 Ensuring a diverse set of well-behaved mesh peers can help prevent this. Implement a robust peer scoring system to detect and disconnect poorly performing or malicious peers. See [gossipsub v1.1: peer scoring](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md#peer-scoring).
 
 
-### Sybil Attacks
+### 6. Sybil Attacks
 
 Attackers create multiple fake identities (Sybil nodes) to manipulate the network.
 
@@ -78,7 +76,7 @@ Attackers create multiple fake identities (Sybil nodes) to manipulate the networ
 Relies on the effectiveness of peer discovery mechanisms, including whitelisting which in controlled by the parent node, which should have access to that information.
 
 
-### Eclipse Attacks
+### 7. Eclipse Attacks
 
 Malicious nodes attempt to control a target node's connections, isolating it from the legitimate peers.
 
@@ -90,7 +88,7 @@ Malicious nodes attempt to control a target node's connections, isolating it fro
 Ensure diverse connectivity by utilizing peer discovery methods and continuously change connected peers.
 
 
-### DHT Pollution: connections
+### 8. DHT Pollution: connections
 
 Malicious nodes flood the DHT with malicious entries as part of an eclipse attack.
 
@@ -103,7 +101,7 @@ Malicious nodes flood the DHT with malicious entries as part of an eclipse attac
 - Regularly check the integrity of DHT data and remove or quarantine polluted entries
 
 
-### DHT Pollution: storage
+### 9. DHT Pollution: storage
 
 Malicious nodes flood the DHT with irrelevant data, potentially disrupting the network's ability to perform efficient content retrieval.
 
