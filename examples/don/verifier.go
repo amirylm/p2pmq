@@ -1,11 +1,8 @@
 package don
 
 import (
-	"context"
 	"fmt"
-	"io"
 
-	"github.com/amirylm/p2pmq/commons/utils"
 	"github.com/amirylm/p2pmq/proto"
 )
 
@@ -14,87 +11,27 @@ var (
 	invalidThreshold int64 = 25
 )
 
-type Verifier interface {
-	Start(context.Context) error
-	Stop()
-
-	Process(raw []byte) ([]byte, proto.ValidationResult)
+// reportVerifier is doing the actual validation on incoming messages
+type reportVerifier struct {
+	reports *ReportBuffer
+	dons    map[string]map[OracleID]OnchainPublicKey
 }
 
-type verifier struct {
-	threadCtrl utils.ThreadControl
-	grpc       GrpcEndPoint
-	reports    *ReportBuffer
-	dons       map[string]map[OracleID]OnchainPublicKey
-}
-
-func NewVerifier(reports *ReportBuffer, grpc GrpcEndPoint) Verifier {
-	return &verifier{
-		threadCtrl: utils.NewThreadControl(),
-		grpc:       grpc,
-		reports:    reports,
-		dons:       make(map[string]map[OracleID]OnchainPublicKey),
+func NewReportVerifier(reports *ReportBuffer) *reportVerifier {
+	return &reportVerifier{
+		reports: reports,
+		dons:    make(map[string]map[OracleID]OnchainPublicKey),
 	}
 }
 
-func (v *verifier) Start(ctx context.Context) error {
-	conn, err := v.grpc.Connect()
-	if err != nil {
-		return err
-	}
-	valRouter := proto.NewValidationRouterClient(conn)
-	routerClient, err := valRouter.Handle(ctx)
-	if err != nil {
-		return err
-	}
-
-	valQ := make(chan *proto.Message, 1)
-
-	v.threadCtrl.Go(func(ctx context.Context) {
-		defer close(valQ)
-
-		for ctx.Err() == nil {
-			msg, err := routerClient.Recv()
-			if err == io.EOF || err == context.Canceled || ctx.Err() != nil || msg == nil { // stream closed
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case valQ <- msg:
-			}
-		}
-	})
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case next := <-valQ:
-			if next == nil {
-				return nil
-			}
-			_, result := v.Process(next.GetData())
-			res := &proto.ValidatedMessage{
-				Result: result,
-				Msg:    next,
-			}
-			routerClient.Send(res)
-		}
-	}
-}
-
-func (v *verifier) Stop() {
-	v.threadCtrl.Close()
-}
-
-func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
+func (rv *reportVerifier) Process(msg *proto.Message) ([]byte, proto.ValidationResult) {
+	raw := msg.GetData()
 	r, err := UnmarshalReport(raw)
 	if err != nil || r == nil {
 		// bad encoding
 		return raw, proto.ValidationResult_REJECT
 	}
-	pubkeys, ok := v.dons[r.Src]
+	pubkeys, ok := rv.dons[r.Src]
 	if !ok {
 		return raw, proto.ValidationResult_IGNORE
 	}
@@ -124,11 +61,11 @@ func (v *verifier) Process(raw []byte) ([]byte, proto.ValidationResult) {
 		return raw, proto.ValidationResult_REJECT
 	}
 
-	return raw, v.validateSequence(r)
+	return raw, rv.validateSequence(r)
 }
 
-func (v *verifier) validateSequence(r *MockedSignedReport) proto.ValidationResult {
-	latest := v.reports.GetLatest(r.Src)
+func (rv *reportVerifier) validateSequence(r *MockedSignedReport) proto.ValidationResult {
+	latest := rv.reports.GetLatest(r.Src)
 	if latest != nil {
 		diff := r.SeqNumber - latest.SeqNumber
 		switch {
@@ -139,7 +76,7 @@ func (v *verifier) validateSequence(r *MockedSignedReport) proto.ValidationResul
 		default: // less than skipThreshold, accept
 		}
 	}
-	if v.reports.Get(r.Src, r.SeqNumber) != nil {
+	if rv.reports.Get(r.Src, r.SeqNumber) != nil {
 		return proto.ValidationResult_IGNORE
 	}
 	return proto.ValidationResult_ACCEPT

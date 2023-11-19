@@ -3,28 +3,35 @@ package don
 import (
 	"context"
 
+	"github.com/amirylm/p2pmq/api/grpc/client"
 	"github.com/amirylm/p2pmq/commons/utils"
+	"github.com/amirylm/p2pmq/proto"
 )
 
 type Node struct {
 	utils.StartStopOnce
 	threadC utils.ThreadControl
 
-	Grpc    GrpcEndPoint
+	Grpc    client.GrpcEndPoint
 	Reports *ReportBuffer
 
 	Transmitter OverlayTrasnmitter
-	Consumer    MsgConsumer
-	Verifier    Verifier
-	Signers     map[string]Signer
+	// Consumer is the consumer client to get messages from the MsgRouter
+	Consumer client.Consumer
+	// Verifier is the verifier client that faciliates interaction with the ValidationRouter
+	Verifier client.Verifier
+	// reportVerifier is doing the actual validation on incoming messages
+	reportVerifier *reportVerifier
+	Signers        map[string]Signer
 }
 
-func NewNode(grpc GrpcEndPoint, opts ...NodeOpt) *Node {
+func NewNode(grpc client.GrpcEndPoint, opts ...NodeOpt) *Node {
 	nodeOpts := defaultNodeOpts()
 	for _, opt := range opts {
 		opt(nodeOpts)
 	}
 	reports := NewReportBuffer(nodeOpts.bufferSize)
+	reportVerifier := NewReportVerifier(reports)
 	return &Node{
 		threadC: utils.NewThreadControl(),
 
@@ -32,9 +39,22 @@ func NewNode(grpc GrpcEndPoint, opts ...NodeOpt) *Node {
 		Reports: reports,
 
 		Transmitter: NewOverlayTransmitter(grpc, nodeOpts.reportManipulator),
-		Consumer:    NewMsgConsumer(reports, grpc),
-		Verifier:    NewVerifier(reports, grpc),
-		Signers:     map[string]Signer{},
+		Consumer: client.NewConsumer(grpc, func(msg *proto.Message) error {
+			r, err := UnmarshalReport(msg.GetData())
+			if err != nil || r == nil {
+				// bad encoding, not expected
+				return err
+			}
+			if reports.Add(r.Src, *r) {
+				// TODO: notify new report
+			}
+			return nil
+		}),
+		Verifier: client.NewVerifier(grpc, func(msg *proto.Message) proto.ValidationResult {
+			_, res := reportVerifier.Process(msg)
+			return res
+		}),
+		Signers: map[string]Signer{},
 	}
 }
 
