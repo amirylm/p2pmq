@@ -33,9 +33,9 @@ type Controller struct {
 	mdnsSvc mdns.Service
 	pubsub  *pubsub.PubSub
 
-	psManager pubsubManager
-	denylist  pubsub.Blacklist
-	subFilter pubsub.SubscriptionFilter
+	topicManager *topicManager
+	denylist     pubsub.Blacklist
+	subFilter    pubsub.SubscriptionFilter
 
 	valRouter MsgRouter[pubsub.ValidationResult]
 	msgRouter MsgRouter[error]
@@ -54,6 +54,7 @@ func NewController(
 		cfg:           cfg,
 		valRouter:     valRouter,
 		msgRouter:     msgRouter,
+		topicManager:  newTopicManager(),
 	}
 	err := d.setup(ctx, cfg)
 
