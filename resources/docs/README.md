@@ -24,21 +24,21 @@ This document describes a solution for cross networks communication, including o
 
 ## Overview
 
-By introducing a decentralized messaging engine (DME) that enables to securely exchange verifiable messages cross networks, we enable the formation of a global, collaborative network that is consist of multiple overlay networks.
+By introducing a decentralized messaging engine (DME) that facilitates the secure exchange of verifiable messages across networks, we enable the formation of a global, collaborative network that consists of multiple overlay networks.
 
-The protocol leverages libp2p and gossipsub v1.1 for robust networking and message propagation while ensuring the integrity and authenticity of transmitted data through an outsourced cryptographic and sequence validation.
+The resulting protocol leverages libp2p and gossipsub v1.1 in order to provide robust networking and message propagation while ensuring the integrity and authenticity of transmitted data by outsourcing the process of cryptographic and sequence validation.
 
-The following diagrams visualize the topology of a global network,
-where the dashed lines represent overlay networks, and the solid lines represent the underlying/standalone networks:
+The following diagram visualizes the topology of a such a global network,
+where the dashed lines represent overlay networks and the solid lines represent the underlying/standalone networks:
 
 ![overlays-topology.png](./overlays-topology.png)
 
 ### Goals
 
-- Enable secure communication layer cross networks
-- Enable validation and authentication exchanged messages via outsourced verification
-- Utilize libp2p and gossipsub for efficient networking and message propagation
-- Provide a flexible/extensible API for various use cases, while maintaining a simple and robust protocol that can manage scale and high throughput
+- Enable secure communication layer across networks
+- Enable exchange of messages while facilitating validation and authentication via an outsourced verification mechanism
+- Provie efficient and reliable network communication and message propagation by utilizing proven protocols such as gossipsub
+- Provide a flexible & extensible API that serves an array of use cases, while maintaining a simple and robust protocol that can withstand scaling and high throughput
 
 ### Background: Libp2p
 
@@ -46,7 +46,7 @@ Libp2p is a modular networking framework designed for peer-to-peer communication
 
 [gossipsub v1.1](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md) is a dynamic and efficient message propagation protocol, it is based on randomized topic meshes and gossip, with moderate amplification factors and good scaling properties.
 
-Gossipsub is designed to be extensible by more specialized routers, and provides an optimized environment for a distributed protocol that runs over a trust-less p2p network.
+Gossipsub is designed to be extensible by more specialized routers and provides an optimized environment for a distributed protocol that runs over a trust-less p2p network.
 
 Libp2p was chosen because it provides a battle tested, complete yet extensible networking framework for a distributed message engine.
 
@@ -56,29 +56,31 @@ Libp2p was chosen because it provides a battle tested, complete yet extensible n
 
 ### Technical Overview
 
-Agents runs within some parent node, and enables the node to gossip messages in an overlay network (topic), with an outsourced message validation to avoid introducing additional dependencies for the agent such as validation keys.
+Agents runs within some parent nodes, and enables the node to gossip messages in an overlay network (topic), while using an outsourced message validation to avoid introducing additional dependencies for the agent such as requiring validation keys.
 
-Sending verified-only information enables to achieve optimal latency and throughput because there is no additional signing involved. In addition, consensus is not needed for sharing a sequential, signed-by-quorum data, which is usually stored on-chain or some public storage.
+Sending verified-only information enables to achieve optimal latency and throughput due to having no additional signing involved. Additionally, consensus is not needed for sharing a sequential, signed-by-quorum data, which is usually stored on-chain or some public storage.
 
-Message validation is decoupled from the agent, which queues messages for validation and processing, and enables to implement a custom validation logic according to each network needs.
+Message validation is decoupled from the agents, which queue messages for validation and processing, thus enabling the implementation of any specifically tailored, custom validation logic according to each network requirements.
 
-Based on validation results, message rate and overall behaviour, peer scoring is being facilitated by the pubsub router, but requires network specific settings to fit the topology, expected message rate and the strictness of the needed validation.
+Peer scoring is facilitated by the pubsub router according to validation results, messaging rate and overall behaviour, however it is still required that network specific setting fit the topology, expected message rate and the strictness of the validation requirements.
 
 ### Architecture
 
-Agents are separate processes running within some parent node, interacting with the parent node via a gRPC API, following [go-plugin](https://github.com/hashicorp/go-plugin) for achieving a modular architecture. 
+Agents are separate processes running within some parent node, interaction is done via a gRPC API, following [go-plugin](https://github.com/hashicorp/go-plugin) in order to achieve modularity.
 
-The following diagram visualize the system:
+The following diagram illustrates the system architecture:
 
 ![arch-node.png](./arch-node.png)
 
-Agents manages libp2p components such as the gossipsub router, which is responsible for message propagation and peer scoring. In addition, the following services runs within the agent:
+Agents manages libp2p components such as the gossipsub router, which is responsible for message propagation and peer scoring. Additionally, the following services run within the agent:
 
 - **validation router** for message validation and processing
 - **message router** for consuming messages
 - **control service** for managing subscriptions, publishing messages and more.
 
-The node implements verifiers for validating messages, and processors for processing incoming messages from other networks, and broadcasting messages on behalf of the node to other networks.
+The node implements:
+- verifiers for validating messages
+- processors for processing incoming messages from other networks, and broadcasting messages on behalf of the node to other networks.
 
 ### API
 
@@ -104,24 +106,25 @@ service ValidationRouter {
 
 Each network creates an overlay network for outbound traffic (i.e. pubsub topic), where other networks can subscribe for messages.
 
-There might be multiple overlay networks for broadcasting messages from the same network, depends on versioning and business logic.
-For instance, in case the encoding of the messages has changed, a new overlay network will be created for the new version, and the old overlay network will be neglected until it is no longer needed or used.
+There might be multiple overlay networks for broadcasting messages from the same network, depending on versioning and business logic.
+For instance, in case the encoding of the messages has changed, a new overlay network will be created for the new version and the old overlay network will be neglected until it is no longer needed or used.
 
-The amount of overlay connections to nodes in other networks might be changed dynamically, depends on the network topology and the amount of nodes in each network.
-Gossipsub allows to configure the amount of peers per topic, while having decent propagation of messages. That property enables to scale the global network to a large amount of nodes, w/o flooding the wires and consuming too much resources.
+The amount of overlay connections to nodes in other networks might be changed dynamically, depending on the network topology and the amount of nodes in each network. Gossipsub allows to configure the amount of peers per topic while facilitating decent propagation of messages. This property enables the scale of the global network to a large quantity of nodes w/o flooding the wires and consuming too much resources.
 
 ### Message Validation
 
-As the validation is outsourced the parent node, we rely on the security properties of an existing nodes and infrastructure for signing and verifying messages.
+Due to the validation being outsourced to the parent node, we rely on the security properties of an existing infrastructure for the processes of signing and verifying messages.
 
-**NOTE:** Having validation within the agent introduces complexity and vulnerabilities.
+**NOTE:** Having validation within the agent introduces significant complexity, dependencies and aaditional vulnerabilities.
 
 All the messages are propagated through the pipes must be valid.
 In case of invalid messages, the message will be dropped and the sender, regardless of the message origin, will be penalized by the gossipsub router.
 
-E.g. for an oracle (or other offchain computing) network, messages must comply with the following strict rules:
+E.g. for an oracles (or other offchain computing) network, messages must comply with the following strict rules:
 
 - The message was **signed by a quorum** of a standalone-network nodes
 - The message has a **sequence number** that match the current order, taking into account potential gaps that might be created due to bad network conditions.
-    - Messages that are older than **Validity Threshold** (value TBD) are considered invalid and will result in a low score for the sender, either the origin peer or a gossiper peer
-    - Messages that are older than **Skip Threshold** (value TBD) will be ignored w/o affecting sender scores
+    - Messages that are older than **Validity Threshold** are considered invalid and will result in a low score for the sender, which can be either the origin peer or a gossiper peer
+    - Messages that are older than **Skip Threshold** will be ignored w/o affecting sender scores
+
+**NOTE:** validity and skip thresholds should be set within the parent node, according to the network topology and expected message rate.
