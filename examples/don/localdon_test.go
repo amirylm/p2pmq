@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	grpcapi "github.com/amirylm/p2pmq/api/grpc"
+	"github.com/amirylm/p2pmq/api/grpc/client"
 	"github.com/amirylm/p2pmq/core"
 )
 
@@ -106,7 +107,7 @@ func TestCrossDONCommunication(t *testing.T) {
 			srv := s
 			port := randPort()
 			addrs[i] = fmt.Sprintf(":%d", port)
-			nodes[i] = NewNode(GrpcEndPoint(fmt.Sprintf(":%d", port)))
+			nodes[i] = NewNode(client.GrpcEndPoint(fmt.Sprintf(":%d", port)))
 			go func() {
 				err := grpcapi.ListenGrpc(srv, port)
 				if ctx.Err() == nil {

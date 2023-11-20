@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/amirylm/p2pmq/api/grpc/client"
 	"github.com/amirylm/p2pmq/proto"
 )
 
@@ -16,11 +17,11 @@ type OverlayTrasnmitter interface {
 }
 
 type overlayTransmitter struct {
-	grpc              GrpcEndPoint
+	grpc              client.GrpcEndPoint
 	reportManipulator func(*MockedSignedReport)
 }
 
-func NewOverlayTransmitter(grpc GrpcEndPoint, reportManipulator func(*MockedSignedReport)) OverlayTrasnmitter {
+func NewOverlayTransmitter(grpc client.GrpcEndPoint, reportManipulator func(*MockedSignedReport)) OverlayTrasnmitter {
 	return &overlayTransmitter{
 		grpc:              grpc,
 		reportManipulator: reportManipulator,

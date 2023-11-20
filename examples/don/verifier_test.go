@@ -10,8 +10,7 @@ import (
 func TestVerifier_validateSequence(t *testing.T) {
 	n := 100
 	rb := NewReportBuffer(n)
-
-	v := NewVerifier(rb, "")
+	v := NewReportVerifier(rb)
 
 	missing := map[int]bool{
 		n - 5: true,
@@ -66,7 +65,7 @@ func TestVerifier_validateSequence(t *testing.T) {
 			// TODO: fix
 			r, err := NewMockedSignedReport(nil, tc.seq, tc.don, tc.data)
 			require.NoError(t, err)
-			require.Equal(t, tc.res, v.(*verifier).validateSequence(r))
+			require.Equal(t, tc.res, v.validateSequence(r))
 		})
 	}
 }
