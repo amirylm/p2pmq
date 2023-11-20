@@ -3,7 +3,7 @@ module github.com/amirylm/p2pmq/examples/don
 go 1.21
 
 require (
-	github.com/amirylm/p2pmq v0.0.0
+	github.com/amirylm/p2pmq v0.0.2
 	github.com/ethereum/go-ethereum v1.13.4
 	github.com/ipfs/go-log v1.0.5
 	github.com/libp2p/go-libp2p v0.31.0
