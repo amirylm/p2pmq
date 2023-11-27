@@ -181,7 +181,7 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 	c.topicManager.upgradeTopic(topicName, topic)
 
 	if cfg.MsgValidator != nil || c.cfg.Pubsub.MsgValidator != nil {
-		msgValConfig := commons.MsgValidationConfig{}.Defaults(c.cfg.Pubsub.MsgValidator)
+		msgValConfig := (&commons.MsgValidationConfig{}).Defaults(c.cfg.Pubsub.MsgValidator)
 		if cfg.MsgValidator != nil {
 			msgValConfig = msgValConfig.Defaults(cfg.MsgValidator)
 		}
