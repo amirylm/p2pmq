@@ -25,7 +25,7 @@ test-pkg:
 	@go test -v -race -timeout=${TEST_TIMEOUT} ${TEST_PKG}
 
 test-cov:
-	@go test -v -race -timeout=${TEST_TIMEOUT} -coverprofile cover.out `go list ./... | grep -v -E "cmd|scripts|resources|examples|proto"`
+	@go test -timeout=${TEST_TIMEOUT} -coverprofile cover.out `go list ./... | grep -v -E "cmd|scripts|resources|examples|proto"`
 
 test-open-cov:
 	@make test-cov

@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/amirylm/p2pmq/commons"
@@ -71,7 +69,7 @@ func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) 
 	}
 	c.pubsub = ps
 	c.denylist = denylist
-	c.psManager.topics = make(map[string]*topicWrapper)
+	c.topicManager.topics = make(map[string]*topicWrapper)
 
 	return nil
 }
@@ -86,7 +84,7 @@ func (c *Controller) Publish(ctx context.Context, topicName string, data []byte)
 }
 
 func (c *Controller) Leave(topicName string) error {
-	tw := c.psManager.getTopicWrapper(topicName)
+	tw := c.topicManager.getTopicWrapper(topicName)
 	state := tw.state.Load()
 	switch state {
 	case topicStateJoined, topicStateErr:
@@ -102,7 +100,7 @@ func (c *Controller) Leave(topicName string) error {
 }
 
 func (c *Controller) Unsubscribe(topicName string) error {
-	tw := c.psManager.getTopicWrapper(topicName)
+	tw := c.topicManager.getTopicWrapper(topicName)
 	if tw.state.Load() == topicStateUnknown {
 		return nil // TODO: topic not found?
 	}
@@ -160,14 +158,14 @@ func (c *Controller) listenSubscription(ctx context.Context, sub *pubsub.Subscri
 }
 
 func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
-	topicW := c.psManager.getTopicWrapper(topicName)
+	topicW := c.topicManager.getTopicWrapper(topicName)
 	if topicW != nil {
 		if topicW.state.Load() == topicStateJoining {
 			return nil, fmt.Errorf("already tring to join topic %s", topicName)
 		}
 		return topicW.topic, nil
 	}
-	c.psManager.joiningTopic(topicName)
+	c.topicManager.joiningTopic(topicName)
 	opts := []pubsub.TopicOpt{}
 	cfg, ok := c.cfg.Pubsub.GetTopicConfig(topicName)
 	if ok {
@@ -180,10 +178,10 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.psManager.upgradeTopic(topicName, topic)
+	c.topicManager.upgradeTopic(topicName, topic)
 
 	if cfg.MsgValidator != nil || c.cfg.Pubsub.MsgValidator != nil {
-		msgValConfig := commons.MsgValidationConfig{}.Defaults(c.cfg.Pubsub.MsgValidator)
+		msgValConfig := (&commons.MsgValidationConfig{}).Defaults(c.cfg.Pubsub.MsgValidator)
 		if cfg.MsgValidator != nil {
 			msgValConfig = msgValConfig.Defaults(cfg.MsgValidator)
 		}
@@ -202,7 +200,7 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 
 func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription, err error) {
 	topicName := topic.String()
-	sub = c.psManager.getSub(topicName)
+	sub = c.topicManager.getSub(topicName)
 	if sub != nil {
 		return nil, nil
 	}
@@ -217,7 +215,7 @@ func (c *Controller) trySubscribe(topic *pubsub.Topic) (sub *pubsub.Subscription
 	if err != nil {
 		return nil, err
 	}
-	c.psManager.addSub(topicName, sub)
+	c.topicManager.addSub(topicName, sub)
 	return sub, nil
 }
 
@@ -238,86 +236,6 @@ func (c *Controller) validateMsg(ctx context.Context, p peer.ID, msg *pubsub.Mes
 
 func (c *Controller) inspectPeerScores(map[peer.ID]*pubsub.PeerScoreSnapshot) {
 	// TODO
-}
-
-type pubsubManager struct {
-	lock   sync.RWMutex
-	topics map[string]*topicWrapper
-}
-
-type topicWrapper struct {
-	state atomic.Int32
-	topic *pubsub.Topic
-	sub   *pubsub.Subscription
-}
-
-const (
-	topicStateUnknown = int32(0)
-	topicStateJoining = int32(1)
-	topicStateJoined  = int32(2)
-	topicStateErr     = int32(10)
-)
-
-func (pm *pubsubManager) joiningTopic(name string) {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
-
-	tw := &topicWrapper{}
-	tw.state.Store(topicStateJoining)
-	pm.topics[name] = tw
-}
-
-func (pm *pubsubManager) upgradeTopic(name string, topic *pubsub.Topic) bool {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
-
-	tw, ok := pm.topics[name]
-	if !ok {
-		return false
-	}
-	if !tw.state.CompareAndSwap(topicStateJoining, topicStateJoined) {
-		return false
-	}
-	tw.topic = topic
-	pm.topics[name] = tw
-
-	return true
-}
-
-func (pm *pubsubManager) getTopicWrapper(topic string) *topicWrapper {
-	pm.lock.RLock()
-	defer pm.lock.RUnlock()
-
-	t, ok := pm.topics[topic]
-	if !ok {
-		return nil
-	}
-	return t
-}
-
-func (pm *pubsubManager) addSub(name string, sub *pubsub.Subscription) bool {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
-
-	tw, ok := pm.topics[name]
-	if ok {
-		// TODO: enable multiple subscriptions per topic
-		return false
-	}
-	tw.sub = sub
-
-	return true
-}
-
-func (pm *pubsubManager) getSub(topic string) *pubsub.Subscription {
-	pm.lock.RLock()
-	defer pm.lock.RUnlock()
-
-	tw, ok := pm.topics[topic]
-	if !ok {
-		return nil
-	}
-	return tw.sub
 }
 
 // psTracer helps to trace pubsub events, implements pubsublibp2p.EventTracer

@@ -40,7 +40,7 @@ type MsgValidationConfig struct {
 	Concurrency int           `json:"concurrency,omitempty" yaml:"concurrency,omitempty"`
 }
 
-func (mvc MsgValidationConfig) Defaults(other *MsgValidationConfig) MsgValidationConfig {
+func (mvc *MsgValidationConfig) Defaults(other *MsgValidationConfig) *MsgValidationConfig {
 	if mvc.Timeout.Milliseconds() == 0 {
 		mvc.Timeout = time.Second * 5
 	}

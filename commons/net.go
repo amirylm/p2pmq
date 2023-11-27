@@ -19,16 +19,17 @@ func GetOrGeneratePrivateKey(privKeyB64 string) (sk crypto.PrivKey, encodedB64 s
 			return nil, encodedB64, err
 		}
 		// TODO: pool base64 encoders
-		encodedB64 = base64.StdEncoding.EncodeToString(encoded)
+		encodedB64 = base64.RawStdEncoding.EncodeToString(encoded)
 		return sk, encodedB64, nil
 	}
-	encoded, err := base64.StdEncoding.DecodeString(encodedB64)
+	encodedB64 = privKeyB64
+	encoded, err := base64.RawStdEncoding.DecodeString(encodedB64)
 	if err != nil {
-		return nil, privKeyB64, err
+		return nil, encodedB64, fmt.Errorf("failed to decode private key with base64: %w", err)
 	}
 	sk, err = crypto.UnmarshalPrivateKey(encoded)
 	if err != nil {
-		return nil, privKeyB64, err
+		return nil, encodedB64, fmt.Errorf("failed to unmarshal private key: %w", err)
 	}
 	return sk, encodedB64, nil
 }
