@@ -75,6 +75,8 @@ func TestController_Sanity(t *testing.T) {
 
 	for topic, counter := range msgHitMap {
 		count := int(counter.Load()) / n // per node
+		// add 1 to account for the first message sent by the node
+		count += 1
 		require.GreaterOrEqual(t, count, rounds, "should get %d messages on topic %s", rounds, topic)
 	}
 }

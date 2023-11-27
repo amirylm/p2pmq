@@ -17,4 +17,10 @@ func TestGetOrGeneratePrivateKey(t *testing.T) {
 	require.NotNil(t, sk2)
 	require.Equal(t, skb64, sk2b64)
 	require.True(t, sk.Equals(sk2))
+
+	t.Run("bad input", func(t *testing.T) {
+		sk, _, err := GetOrGeneratePrivateKey("bad input")
+		require.Error(t, err)
+		require.Nil(t, sk)
+	})
 }
