@@ -24,11 +24,11 @@ func GetOrGeneratePrivateKey(privKeyB64 string) (sk crypto.PrivKey, encodedB64 s
 	}
 	encoded, err := base64.StdEncoding.DecodeString(encodedB64)
 	if err != nil {
-		return nil, privKeyB64, err
+		return nil, privKeyB64, fmt.Errorf("failed to decode private key with base64: %w", err)
 	}
 	sk, err = crypto.UnmarshalPrivateKey(encoded)
 	if err != nil {
-		return nil, privKeyB64, err
+		return nil, privKeyB64, fmt.Errorf("failed to unmarshal private key: %w", err)
 	}
 	return sk, encodedB64, nil
 }
