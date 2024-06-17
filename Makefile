@@ -6,6 +6,9 @@ CFG_PATH?=./resources/config/default.p2pmq.yaml
 TEST_PKG?=./core/...
 TEST_TIMEOUT?=2m
 
+protoc:
+	./scripts/proto-gen.sh
+
 lint:
 	@docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v1.54 golangci-lint run -v --timeout=5m ./...
 
