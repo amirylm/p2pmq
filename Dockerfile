@@ -9,7 +9,7 @@ RUN apt-get update && \
 
 ARG APP_VERSION=nightly
 ARG APP_NAME=p2pmq
-ARG BUILD_TARGET=p2pmq
+ARG BUILD_TARGET=pmq
 
 WORKDIR /p2pmq
 
@@ -23,7 +23,7 @@ RUN GOOS=linux CGO_ENABLED=0 go build -tags netgo -a -v -o ./bin/${BUILD_TARGET}
 
 FROM alpine:latest as runner
 
-ARG BUILD_TARGET=p2pmq
+ARG BUILD_TARGET=pmq
 
 RUN apk --no-cache --upgrade add ca-certificates bash
 
@@ -32,3 +32,5 @@ WORKDIR /p2pmq
 COPY --from=builder /p2pmq/.env* ./
 COPY --from=builder /p2pmq/resources/config/*.p2pmq.yaml ./
 COPY --from=builder /p2pmq/bin/${BUILD_TARGET} ./app
+
+CMD ["./app"]
