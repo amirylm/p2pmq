@@ -18,7 +18,7 @@ type PubsubConfig struct {
 	Scoring              *ScoringParams       `json:"scoring,omitempty" yaml:"scoring,omitempty"`
 	MsgValidator         *MsgValidationConfig `json:"msgValidator,omitempty" yaml:"msgValidator,omitempty"`
 	MsgIDFnConfig        *MsgIDFnConfig       `json:"msgIDFn,omitempty" yaml:"msgIDFn,omitempty"`
-	Trace                bool                 `json:"trace,omitempty" yaml:"trace,omitempty"`
+	Trace                *PubsubTraceConfig   `json:"trace,omitempty" yaml:"trace,omitempty"`
 }
 
 func (psc PubsubConfig) GetTopicConfig(name string) (TopicConfig, bool) {
@@ -28,6 +28,12 @@ func (psc PubsubConfig) GetTopicConfig(name string) (TopicConfig, bool) {
 		}
 	}
 	return TopicConfig{}, false
+}
+
+type PubsubTraceConfig struct {
+	Skiplist []string `json:"skiplist,omitempty" yaml:"skiplist,omitempty"`
+	JsonFile string   `json:"jsonFile,omitempty" yaml:"jsonFile,omitempty"`
+	Debug    bool     `json:"debug,omitempty" yaml:"debug,omitempty"`
 }
 
 type MsgIDFnConfig struct {
