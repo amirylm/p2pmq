@@ -41,11 +41,6 @@ func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) 
 		opts = append(opts, pubsub.WithSeenMessagesTTL(cfg.Pubsub.Overlay.SeenTtl))
 	}
 
-	opts = append(opts, pubsub.WithAppSpecificRpcInspector(func(p peer.ID, rpc *pubsub.RPC) error {
-		c.pubsubRpcCounter.Add(1)
-		return nil
-	}))
-
 	denylist := pubsub.NewMapBlacklist()
 	opts = append(opts, pubsub.WithBlacklist(denylist))
 
@@ -74,6 +69,11 @@ func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) 
 		tracer := newPubsubTracer(c.lggr.Named("PubsubTracer"), cfg.Pubsub.Trace.Debug, cfg.Pubsub.Trace.Skiplist, jtracer)
 		c.psTracer = tracer.(*psTracer)
 		opts = append(opts, pubsub.WithEventTracer(tracer))
+		// TODO: config?
+		opts = append(opts, pubsub.WithAppSpecificRpcInspector(func(p peer.ID, rpc *pubsub.RPC) error {
+			c.pubsubRpcCounter.Add(1)
+			return nil
+		}))
 	}
 
 	ps, err := pubsub.NewGossipSub(ctx, c.host, opts...)
