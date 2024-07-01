@@ -25,3 +25,8 @@ bin
 
 cover.out
 cover.html
+
+.output
+
+.DS_Store
+*.log
