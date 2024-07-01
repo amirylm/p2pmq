@@ -3,9 +3,9 @@ package core
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"text/template"
 	"time"
@@ -43,23 +43,82 @@ func TestGossipMsgThroughput(t *testing.T) {
 	defer cancel()
 	require.NoError(t, logging.SetLogLevelRegex("p2pmq", "error"))
 
-	groupsCfgSimple, groupsCfgMedium := testGroupSimple(), testGroupMedium()
+	// groupsCfgSimple11 := testGroupSimple(11, 4, 6, 1)
+	groupsCfgSimple18 := testGroupSimple(18, 10, 6, 2)
+	groupsCfgSimple36 := testGroupSimple(36, 16, 16, 4)
+	groupsCfgSimple54 := testGroupSimple(54, 32, 16, 6)
+
+	benchFlows := []flow{
+		// flowTrigger("a", 1, time.Millisecond*10),
+		flowActionA2B(1, time.Millisecond*1, time.Millisecond*250),
+		flowActionA2B(10, time.Millisecond*1, time.Millisecond*1),
+		// // flowActionA2B(50, time.Millisecond*1, time.Millisecond*1),
+		flowActionA2B(100, time.Millisecond*1, time.Millisecond*10),
+		flowActionA2B(1000, time.Millisecond*10, time.Millisecond*10),
+		flowTrigger("b", 1, time.Millisecond*10),
+		flowTrigger("b", 10, time.Millisecond*1),
+		// flowTrigger("b", 50, time.Millisecond*1),
+		flowTrigger("b", 100, time.Millisecond*10),
+		flowTrigger("b", 1000, time.Millisecond*10),
+		flowTrigger("a", 1, time.Millisecond*10),
+		flowTrigger("a", 10, time.Millisecond*10),
+		// // flowTrigger("b", 50, time.Millisecond*1),
+		flowTrigger("a", 100, time.Millisecond*10),
+		flowTrigger("a", 1000, time.Millisecond*10),
+	}
 
 	tests := []struct {
-		name          string
-		n             int
-		pubsubConfig  *commons.PubsubConfig
-		gen           *testGen
-		groupsCfg     map[string]groupCfg
-		conns         connectivity
-		flows         []flow
-		topicsToCheck []string
+		name         string
+		n            int
+		pubsubConfig *commons.PubsubConfig
+		gen          *testGen
+		groupsCfg    groupsCfg
+		conns        connectivity
+		flows        []flow
 	}{
+		// {
+		// 	name: "simple_11",
+		// 	n:    11,
+		// 	gen: &testGen{
+		// 		// hitMaps:   map[string]*nodeHitMap{},
+		// 		routingFn: func(m *pubsub.Message) {},
+		// 		validationFn: func(p peer.ID, m *pubsub.Message) pubsub.ValidationResult {
+		// 			return pubsub.ValidationAccept
+		// 		},
+		// 		pubsubConfig: &commons.PubsubConfig{
+		// 			MsgValidator: &commons.MsgValidationConfig{},
+		// 			Trace: &commons.PubsubTraceConfig{
+		// 				// JsonFile: fmt.Sprintf("../.output/trace/node-%d.json", i+1),
+		// 				Skiplist: traceEmptySkipList,
+		// 			},
+		// 			Overlay: &commons.OverlayParams{
+		// 				D:     3,
+		// 				Dlow:  2,
+		// 				Dhi:   5,
+		// 				Dlazy: 3,
+		// 			},
+		// 		},
+		// 	},
+		// 	groupsCfg: groupsCfgSimple11,
+		// 	conns: func() connectivity {
+		// 		conns := groupsCfgSimple11.baseConnectivity()
+		// 		// add some extra connections between a and b
+		// 		conns[0] = append(conns[0], 5, 7, 9)
+		// 		conns[1] = append(conns[1], 4, 6, 8)
+		// 		conns[2] = append(conns[2], 4, 5, 7)
+		// 		conns[3] = append(conns[3], 4, 6, 8)
+		// 		return conns
+		// 	}(),
+		// 	flows: []flow{
+		// 		flowActionA2B(1, time.Millisecond*1, time.Millisecond*250),
+		// 		flowTrigger("b", 2, time.Millisecond*10),
+		// 	},
+		// },
 		{
-			name: "simple_11",
-			n:    11,
+			name: "simple_18",
+			n:    18,
 			gen: &testGen{
-				hitMaps:   map[string]*nodeHitMap{},
+				// hitMaps:   map[string]*nodeHitMap{},
 				routingFn: func(m *pubsub.Message) {},
 				validationFn: func(p peer.ID, m *pubsub.Message) pubsub.ValidationResult {
 					return pubsub.ValidationAccept
@@ -67,7 +126,6 @@ func TestGossipMsgThroughput(t *testing.T) {
 				pubsubConfig: &commons.PubsubConfig{
 					MsgValidator: &commons.MsgValidationConfig{},
 					Trace: &commons.PubsubTraceConfig{
-						// JsonFile: fmt.Sprintf("../.output/trace/node-%d.json", i+1),
 						Skiplist: traceEmptySkipList,
 					},
 					Overlay: &commons.OverlayParams{
@@ -78,67 +136,15 @@ func TestGossipMsgThroughput(t *testing.T) {
 					},
 				},
 			},
-			groupsCfg: groupsCfgSimple,
-			conns: map[int][]int{
-				0: append(append(groupsCfgSimple["a"].ids, groupsCfgSimple["relayers"].ids...),
-					5, 7, 9, // group b
-				),
-				1: append(append(groupsCfgSimple["a"].ids, groupsCfgSimple["relayers"].ids...),
-					4, 6, 8, // group b
-				),
-				2: append(append(groupsCfgSimple["a"].ids, groupsCfgSimple["relayers"].ids...),
-					4, 5, 7, // group b
-				),
-				3: append(append(groupsCfgSimple["a"].ids, groupsCfgSimple["relayers"].ids...),
-					4, 6, 8, // group b
-				),
-				4: append(groupsCfgSimple["b"].ids, groupsCfgSimple["relayers"].ids...),
-				5: append(groupsCfgSimple["b"].ids, groupsCfgSimple["relayers"].ids...),
-				6: append(groupsCfgSimple["b"].ids, groupsCfgSimple["relayers"].ids...),
-				7: append(groupsCfgSimple["b"].ids, groupsCfgSimple["relayers"].ids...),
-				8: append(groupsCfgSimple["b"].ids, groupsCfgSimple["relayers"].ids...),
-				9: append(groupsCfgSimple["b"].ids, groupsCfgSimple["relayers"].ids...),
-			},
-			flows: []flow{
-				{
-					name: "actions a->b",
-					events: []flowEvent{
-						{
-							srcGroup: "a",
-							topic:    "b.action.req",
-							pattern:  "dummy-request-{{.i}}",
-							interval: time.Millisecond * 10,
-							wait:     true,
-						},
-						{
-							srcGroup: "b",
-							topic:    "b.action.res",
-							pattern:  "dummy-response-{{.i}}",
-						},
-					},
-					iterations: 1,
-					interval:   time.Millisecond * 250,
-				},
-				{
-					name: "triggers b",
-					events: []flowEvent{
-						{
-							srcGroup: "b",
-							topic:    "b.trigger",
-							pattern:  "dummy-trigger-{{.group}}-{{.i}}",
-							interval: time.Millisecond * 10,
-						},
-					},
-					iterations: 2,
-					interval:   time.Millisecond * 10,
-				},
-			},
+			groupsCfg: groupsCfgSimple18,
+			conns:     groupsCfgSimple18.allToAllConnectivity(),
+			flows:     benchFlows[:],
 		},
 		{
-			name: "medium_29",
-			n:    29,
+			name: "simple_36",
+			n:    36,
 			gen: &testGen{
-				hitMaps:   map[string]*nodeHitMap{},
+				// hitMaps:   map[string]*nodeHitMap{},
 				routingFn: func(m *pubsub.Message) {},
 				validationFn: func(p peer.ID, m *pubsub.Message) pubsub.ValidationResult {
 					return pubsub.ValidationAccept
@@ -146,153 +152,68 @@ func TestGossipMsgThroughput(t *testing.T) {
 				pubsubConfig: &commons.PubsubConfig{
 					MsgValidator: &commons.MsgValidationConfig{},
 					Trace: &commons.PubsubTraceConfig{
-						// JsonFile: fmt.Sprintf("../.output/trace/node-%d.json", i+1),
 						Skiplist: traceEmptySkipList,
 					},
 					Overlay: &commons.OverlayParams{
-						D:     3,
+						D:     4,
 						Dlow:  2,
-						Dhi:   5,
+						Dhi:   6,
 						Dlazy: 3,
 					},
 				},
 			},
-			groupsCfg: groupsCfgMedium,
-			conns: map[int][]int{
-				0: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					10, 11, 12, // group b
-					20, 21, 22, // group c
-				),
-				1: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					14, 11, 15, // group b
-					24, 21, 25, // group c
-				),
-				2: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					13, 12, 16, // group b
-					23, 22, 26, // group c
-				),
-				3: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					14, 15, 17, // group b
-					24, 25, 27, // group c
-				),
-				4: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					10, 11, 12, // group b
-					20, 21, 22, // group c
-				),
-				5: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					14, 11, 15, // group b
-					21, 20, // group c
-				),
-				6: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					13, 12, 16, // group b
-					23, 22, // group c
-				),
-				7: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					14, 15, 17, // group b
-					25, // group c
-				),
-				8: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					10, 11, 12, // group b
-					20, 21, // group c
-				),
-				9: append(append(groupsCfgMedium["a"].ids, groupsCfgMedium["relayers"].ids...),
-					14, 19, 15, // group b
-					24, // group c
-				),
-				10: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					24, 22, // group c
-				),
-				11: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					22, // group c
-				),
-				12: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					22, 23, // group c
-				),
-				13: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					24, 21, // group c
-				),
-				14: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					20, // group c
-				),
-				15: append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-				16: append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-				17: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					22, // group c
-				),
-				18: append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-				19: append(append(groupsCfgMedium["b"].ids, groupsCfgMedium["relayers"].ids...),
-					20, // group c
-				),
-				20: append(groupsCfgMedium["c"].ids, groupsCfgMedium["relayers"].ids...),
-				21: append(groupsCfgMedium["c"].ids, groupsCfgMedium["relayers"].ids...),
-				22: append(groupsCfgMedium["c"].ids, groupsCfgMedium["relayers"].ids...),
-				23: append(groupsCfgMedium["c"].ids, groupsCfgMedium["relayers"].ids...),
-				24: append(groupsCfgMedium["c"].ids, groupsCfgMedium["relayers"].ids...),
-				25: append(groupsCfgMedium["c"].ids, groupsCfgMedium["relayers"].ids...),
-				26: groupsCfgMedium["relayers"].ids,
-				27: groupsCfgMedium["relayers"].ids,
-				28: groupsCfgMedium["relayers"].ids,
-			},
-			flows: []flow{
-				{
-					name: "actions a->b",
-					events: []flowEvent{
-						{
-							srcGroup: "a",
-							topic:    "b.action.req",
-							pattern:  "dummy-request-{{.i}}",
-							interval: time.Millisecond * 10,
-							wait:     true,
-						},
-						{
-							srcGroup: "b",
-							topic:    "b.action.res",
-							pattern:  "dummy-response-{{.i}}",
-						},
-					},
-					iterations: 5,
-					interval:   time.Millisecond * 250,
+			groupsCfg: groupsCfgSimple36,
+			conns:     groupsCfgSimple36.allToAllConnectivity(),
+			flows:     benchFlows[:],
+		},
+		{
+			name: "simple_36_with_default_overlay_params",
+			n:    36,
+			gen: &testGen{
+				// hitMaps:   map[string]*nodeHitMap{},
+				routingFn: func(m *pubsub.Message) {},
+				validationFn: func(p peer.ID, m *pubsub.Message) pubsub.ValidationResult {
+					return pubsub.ValidationAccept
 				},
-				{
-					name: "triggers b",
-					events: []flowEvent{
-						{
-							srcGroup: "b",
-							topic:    "b.trigger",
-							pattern:  "dummy-trigger-{{.group}}-{{.i}}",
-							interval: time.Millisecond * 10,
-						},
+				pubsubConfig: &commons.PubsubConfig{
+					MsgValidator: &commons.MsgValidationConfig{},
+					Trace: &commons.PubsubTraceConfig{
+						Skiplist: traceEmptySkipList,
 					},
-					iterations: 10,
-					interval:   time.Millisecond * 10,
-				},
-				{
-					name: "triggers b+c",
-					events: []flowEvent{
-						{
-							srcGroup: "b",
-							topic:    "b.trigger",
-							pattern:  "xdummy-trigger-{{.group}}-{{.i}}",
-							interval: time.Millisecond * 10,
-						},
-						{
-							srcGroup: "c",
-							topic:    "c.trigger",
-							pattern:  "xdummy-trigger-{{.group}}-{{.i}}",
-							interval: time.Millisecond * 10,
-						},
-					},
-					iterations: 10,
-					interval:   time.Millisecond * 10,
 				},
 			},
+			groupsCfg: groupsCfgSimple36,
+			conns:     groupsCfgSimple36.allToAllConnectivity(),
+			flows:     benchFlows[:],
+		},
+		{
+			name: "simple_54_with_default_overlay_params",
+			n:    54,
+			gen: &testGen{
+				// hitMaps:   map[string]*nodeHitMap{},
+				routingFn: func(m *pubsub.Message) {},
+				validationFn: func(p peer.ID, m *pubsub.Message) pubsub.ValidationResult {
+					return pubsub.ValidationAccept
+				},
+				pubsubConfig: &commons.PubsubConfig{
+					MsgValidator: &commons.MsgValidationConfig{},
+					Trace: &commons.PubsubTraceConfig{
+						Skiplist: traceEmptySkipList,
+					},
+				},
+			},
+			groupsCfg: groupsCfgSimple54,
+			conns:     groupsCfgSimple54.allToAllConnectivity(),
+			flows:     benchFlows[:],
 		},
 	}
 
+	var outputs []gossipTestOutput
 	for _, tt := range tests {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
-			ctrls, _, _, done, err := StartControllers(ctx, tc.n, tc.gen)
+			tgen := tc.gen
+			ctrls, _, _, done, err := StartControllers(ctx, tc.n, tgen)
 			defer done()
 			require.NoError(t, err)
 
@@ -320,23 +241,48 @@ func TestGossipMsgThroughput(t *testing.T) {
 				}
 			}
 
+			// waiting for nodes to setup subscriptions
 			<-time.After(time.Second * 4) // TODO: avoid timeout
 
 			// starting fresh trace after subscriptions
 			startupFaucets := traceFaucets{}
+			pubsubRpcCount := new(atomic.Uint64)
 			for _, ctrl := range ctrls {
 				startupFaucets.add(ctrl.psTracer.faucets)
 				ctrl.psTracer.Reset()
+				pubsubRpcCount.Store(ctrl.pubsubRpcCounter.Swap(0))
 			}
-			t.Logf("\n [%s] all trace faucets (startup): %+v\n", tc.name, startupFaucets)
+			// t.Logf("\n [%s] startup in_rpc_count: %d\n; trace faucets: %+v\n", tc.name, startupFaucets, pubsubRpcCount.Load())
+
+			d := uint(6)
+			if tgen.pubsubConfig != nil && tgen.pubsubConfig.Overlay != nil {
+				d = uint(tgen.pubsubConfig.Overlay.D)
+			}
+			baseTestOutput := gossipTestOutput{
+				Name: tc.name,
+				N:    uint(tc.n),
+				A:    uint(len(groups["a"])),
+				B:    uint(len(groups["b"])),
+				R:    uint(len(groups["relayers"])),
+				D:    uint(d),
+			}
+
+			startupTestOutput := baseTestOutput
+			startupTestOutput.Iterations = 1
+			startupTestOutput.InboundRPC = pubsubRpcCount.Load()
+			startupTestOutput.Name = fmt.Sprintf("%s-startup", tc.name)
+			outputs = append(outputs, startupTestOutput)
 
 			t.Log("starting flows...")
+
 			for _, f := range tc.flows {
 				flow := f
 				flowTestName := fmt.Sprintf("%s-x%d", flow.name, flow.iterations)
 				t.Run(flowTestName, func(t *testing.T) {
 					threadCtrl := utils.NewThreadControl()
 					defer threadCtrl.Close()
+
+					start := time.Now()
 
 					for i := 0; i < flow.iterations; i++ {
 						for _, e := range flow.events {
@@ -349,53 +295,70 @@ func TestGossipMsgThroughput(t *testing.T) {
 							for _, c := range group {
 								_i := i
 								ctrl := c
+								ctrlName := strings.Replace(ctrl.lggr.Desugar().Name(), ".ctrl", "", 1)
+								ctrlName = strings.Replace(ctrlName, "p2pmq.", "", 1)
 								wg.Add(1)
 								threadCtrl.Go(func(ctx context.Context) {
 									defer wg.Done()
 									args := map[string]interface{}{
 										"i":     _i,
 										"group": event.srcGroup,
-										"ctrl":  ctrl.lggr.Desugar().Name(),
+										"ctrl":  ctrlName,
 										"flow":  flow.name,
 									}
-									require.NoError(t, ctrl.Publish(ctx, event.topic, []byte(event.Msg(args))))
+									msg := event.Msg(args)
+									require.NoError(t, ctrl.Publish(ctx, event.topic, []byte(msg)))
+									// msgID := gossip.DefaultMsgIDFn(&pubsub_pb.Message{Data: []byte(msg)})
+									// hmap.addSent(msgID)
 								})
 							}
 							if event.wait {
 								wg.Wait()
 							}
+							if event.interval > 0 {
+								<-time.After(event.interval)
+							}
 						}
 						<-time.After(flow.interval)
 					}
 
-					faucets := traceFaucets{}
-					for node, hitMap := range tc.gen.hitMaps {
-						for _, topic := range tc.topicsToCheck {
-							t.Logf("[%s] %s messages: %d; validations: %d", node, topic, hitMap.messages(topic), hitMap.validations(topic))
-						}
+					<-time.After(time.Second * 2) // TODO: avoid timeout
 
-						nodeIndex, err := strconv.Atoi(node[5:])
-						require.NoError(t, err)
-						tracer := ctrls[nodeIndex-1].psTracer
-						nodeFaucets := tracer.faucets
-						t.Logf("[%s] trace faucets: %+v", node, nodeFaucets)
-						faucets.add(nodeFaucets)
-						// traceEvents := tracer.Events()
-						// eventsJson, err := MarshalTraceEvents(traceEvents)
-						// require.NoError(t, err)
-						// require.NoError(t, os.WriteFile(fmt.Sprintf("../.output/trace/%s-%s-%s.json", tc.name, node, flow.name), eventsJson, 0644))
-						tracer.Reset()
-					}
-					for _, ctrl := range groups["relayers"] {
+					faucets := traceFaucets{}
+					pubsubRpcCount := new(atomic.Uint64)
+					for _, ctrl := range ctrls {
 						nodeFaucets := ctrl.psTracer.faucets
-						t.Logf("[%s] trace faucets: %+v", ctrl.lggr.Desugar().Name(), nodeFaucets)
+						// t.Logf("[%s] trace faucets: %+v", ctrl.lggr.Desugar().Name(), nodeFaucets)
 						faucets.add(nodeFaucets)
+						pubsubRpcCount.Add(ctrl.pubsubRpcCounter.Swap(0))
+						ctrl.psTracer.Reset()
 					}
-					t.Logf("\n [%s/%s] all trace faucets: %+v\n", tc.name, flowTestName, faucets)
+					testOutput := baseTestOutput
+					testOutput.Name = flow.name
+					testOutput.Iterations = uint(flow.iterations)
+					testOutput.Faucets = msgTraceFaucetsOutput{
+						Publish: faucets.publish,
+						Deliver: faucets.deliver,
+						Reject:  faucets.reject,
+						DropRPC: faucets.dropRPC,
+						SendRPC: faucets.sendRPC,
+						RecvRPC: faucets.recvRPC,
+					}
+					testOutput.InboundRPC = pubsubRpcCount.Load()
+					testOutput.TotalTime = time.Since(start)
+					outputs = append(outputs, testOutput)
+					t.Logf("output: %+v", testOutput)
 				})
 			}
 		})
 	}
+
+	// outDir := t.TempDir() // ../.output
+	// outputsJson, err := json.Marshal(outputs)
+	// require.NoError(t, err)
+	// outputFileName := fmt.Sprintf("%s/test-%d.json", outDir, time.Now().UnixMilli())
+	// require.NoError(t, os.WriteFile(outputFileName, outputsJson, 0644))
+	// t.Logf("outputs saved in %s", outputFileName)
 }
 
 type connectivity map[int][]int
@@ -415,47 +378,123 @@ func (connect connectivity) connect(ctx context.Context, ctrls []*Controller) er
 	return nil
 }
 
+type msgTraceFaucetsOutput struct {
+	Publish int `json:"publish,omitempty"`
+	Deliver int `json:"deliver,omitempty"`
+	Reject  int `json:"reject,omitempty"`
+	DropRPC int `json:"drop_rpc,omitempty"`
+	SendRPC int `json:"send_rpc,omitempty"`
+	RecvRPC int `json:"recv_rpc,omitempty"`
+}
+
+type gossipTestOutput struct {
+	Name          string
+	N, A, B, R, D uint
+	Iterations    uint
+	Faucets       msgTraceFaucetsOutput
+	InboundRPC    uint64
+	TotalTime     time.Duration
+}
+
+type groupsCfg map[string]groupCfg
+
+// baseConnectivity returns a base connectivity map for the groups,
+// where each group member is connected to all other members of the group
+// and to the relayers.
+func (groups groupsCfg) baseConnectivity() connectivity {
+	conns := make(connectivity)
+	var relayerIDs []int
+	relayers, ok := groups["relayers"]
+	if ok {
+		relayerIDs = relayers.ids
+	}
+	for _, cfg := range groups {
+		connectIDs := append(cfg.ids, relayerIDs...)
+		for _, i := range cfg.ids {
+			conns[i] = connectIDs
+		}
+	}
+	return conns
+}
+
+func (groups groupsCfg) allToAllConnectivity() connectivity {
+	conns := make(connectivity)
+	var allIDs []int
+	for _, cfg := range groups {
+		allIDs = append(allIDs, cfg.ids...)
+	}
+	for _, id := range allIDs {
+		conns[id] = allIDs
+	}
+	return conns
+}
+
 type groupCfg struct {
 	ids    []int
 	subs   []string
 	relays []string
 }
 
-func testGroupSimple() map[string]groupCfg {
-	return map[string]groupCfg{
+// testGroupSimple creates a simple test group configuration with n nodes:
+// group a: a nodes
+// group b: b nodes
+// relayers: r nodes
+// NOTE: n >= a + b + r must hold
+func testGroupSimple(n, a, b, r int) groupsCfg {
+	ids := make([]int, n)
+	for i := 0; i < n; i++ {
+		ids[i] = i
+	}
+	return groupsCfg{
 		"a": {
-			ids:  []int{0, 1, 2, 3},
+			ids:  ids[:a],
 			subs: []string{"b.action.res", "b.trigger"},
 		},
 		"b": {
-			ids:  []int{4, 5, 6, 7, 8, 9},
-			subs: []string{"b.action.req"},
+			ids:  ids[a : a+b],
+			subs: []string{"a.trigger", "b.action.req"},
 		},
 		"relayers": {
-			ids:    []int{10},
-			relays: []string{"b.action.req", "b.action.res", "b.trigger"},
+			ids:    ids[a+b : a+b+r],
+			relays: []string{"a.trigger", "b.action.req", "b.action.res", "b.trigger"},
 		},
 	}
 }
 
-func testGroupMedium() map[string]groupCfg {
-	return map[string]groupCfg{
-		"a": {
-			ids:  []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-			subs: []string{"b.action.res", "b.trigger", "c.trigger"},
+func flowActionA2B(iterations int, interval, waitAfterReq time.Duration) flow {
+	return flow{
+		name: "action a->b",
+		events: []flowEvent{
+			{
+				srcGroup: "a",
+				topic:    "b.action.req",
+				pattern:  "dummy-request-{{.group}}-{{.i}}",
+				interval: waitAfterReq,
+				wait:     true,
+			},
+			{
+				srcGroup: "b",
+				topic:    "b.action.res",
+				pattern:  "dummy-response-{{.group}}-{{.i}}",
+			},
 		},
-		"b": {
-			ids:  []int{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
-			subs: []string{"b.action.req", "c.trigger"},
+		iterations: iterations,
+		interval:   interval,
+	}
+}
+
+func flowTrigger(src string, iterations int, interval time.Duration) flow {
+	return flow{
+		name: fmt.Sprintf("trigger %s", src),
+		events: []flowEvent{
+			{
+				srcGroup: src,
+				topic:    fmt.Sprintf("%s.trigger", src),
+				pattern:  "dummy-trigger-{{.group}}-{{.i}}",
+			},
 		},
-		"c": {
-			ids:  []int{20, 21, 22, 23, 24, 25},
-			subs: []string{"b.trigger"},
-		},
-		"relayers": {
-			ids:    []int{26, 27, 28},
-			relays: []string{"b.action.req", "b.action.res", "b.trigger", "c.trigger"},
-		},
+		iterations: iterations,
+		interval:   interval,
 	}
 }
 
@@ -487,42 +526,51 @@ type flow struct {
 	interval   time.Duration
 }
 
-type nodeHitMap struct {
-	lock      sync.RWMutex
-	valHitMap map[string]uint32
-	msgHitMap map[string]uint32
-}
+// type nodeHitMap struct {
+// 	lock           sync.RWMutex
+// 	valHitMap      map[string]uint32
+// 	msgHitMap      map[string]uint32
+// 	sent, recieved map[string]time.Time
+// }
 
-func (n *nodeHitMap) validations(topic string) uint32 {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
+// func (n *nodeHitMap) validations(topic string) uint32 {
+// 	n.lock.RLock()
+// 	defer n.lock.RUnlock()
 
-	return n.valHitMap[topic]
-}
+// 	return n.valHitMap[topic]
+// }
 
-func (n *nodeHitMap) messages(topic string) uint32 {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
+// func (n *nodeHitMap) messages(topic string) uint32 {
+// 	n.lock.RLock()
+// 	defer n.lock.RUnlock()
 
-	return n.msgHitMap[topic]
-}
+// 	return n.msgHitMap[topic]
+// }
 
-func (n *nodeHitMap) addValidation(topic string) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
+// func (n *nodeHitMap) addValidation(topic string) {
+// 	n.lock.Lock()
+// 	defer n.lock.Unlock()
 
-	n.valHitMap[topic] += 1
-}
+// 	n.valHitMap[topic] += 1
+// }
 
-func (n *nodeHitMap) addMessage(topic string) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
+// func (n *nodeHitMap) addMessage(topic, msgID string) {
+// 	n.lock.Lock()
+// 	defer n.lock.Unlock()
 
-	n.msgHitMap[topic] += 1
-}
+// 	n.msgHitMap[topic] += 1
+// 	n.recieved[msgID] = time.Now()
+// }
+
+// func (n *nodeHitMap) addSent(msgID string) {
+// 	n.lock.Lock()
+// 	defer n.lock.Unlock()
+
+// 	n.sent[msgID] = time.Now()
+// }
 
 type testGen struct {
-	hitMaps      map[string]*nodeHitMap
+	// hitMaps      map[string]*nodeHitMap
 	routingFn    func(*pubsub.Message)
 	validationFn func(peer.ID, *pubsub.Message) pubsub.ValidationResult
 	pubsubConfig *commons.PubsubConfig
@@ -538,19 +586,21 @@ func (g *testGen) NextConfig(i int) (commons.Config, MsgRouter[error], MsgRouter
 
 	name := fmt.Sprintf("node-%d", i+1)
 
-	hitMap := &nodeHitMap{
-		valHitMap: make(map[string]uint32),
-		msgHitMap: make(map[string]uint32),
-	}
-	g.hitMaps[name] = hitMap
+	// hitMap := &nodeHitMap{
+	// 	valHitMap: make(map[string]uint32),
+	// 	msgHitMap: make(map[string]uint32),
+	// 	recieved:  make(map[string]time.Time),
+	// 	sent:      make(map[string]time.Time),
+	// }
+	// g.hitMaps[name] = hitMap
 
 	msgRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[error]) {
-		hitMap.addMessage(mw.Msg.GetTopic())
+		// hitMap.addMessage(mw.Msg.GetTopic(), mw.Msg.ID)
 		g.routingFn(mw.Msg)
 	}, gossip.DefaultMsgIDFn)
 
 	valRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[pubsub.ValidationResult]) {
-		hitMap.addValidation(mw.Msg.GetTopic())
+		// hitMap.addValidation(mw.Msg.GetTopic())
 		res := g.validationFn(mw.Peer, mw.Msg)
 		mw.Result = res
 	}, gossip.DefaultMsgIDFn)
