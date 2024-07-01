@@ -300,13 +300,12 @@ func TestGossipMsgThroughput(t *testing.T) {
 								wg.Add(1)
 								threadCtrl.Go(func(ctx context.Context) {
 									defer wg.Done()
-									args := map[string]interface{}{
-										"i":     _i,
-										"group": event.srcGroup,
-										"ctrl":  ctrlName,
-										"flow":  flow.name,
-									}
-									msg := event.Msg(args)
+									msg := event.Msg(msgArgs{
+										i:     _i,
+										group: event.srcGroup,
+										ctrl:  ctrlName,
+										flow:  flow.name,
+									})
 									require.NoError(t, ctrl.Publish(ctx, event.topic, []byte(msg)))
 									// msgID := gossip.DefaultMsgIDFn(&pubsub_pb.Message{Data: []byte(msg)})
 									// hmap.addSent(msgID)
@@ -506,12 +505,18 @@ type flowEvent struct {
 	wait     bool
 }
 
-func (fe flowEvent) Msg(args map[string]interface{}) string {
+type msgArgs struct {
+	i     int
+	group string
+	ctrl  string
+	flow  string
+}
+
+func (fe flowEvent) Msg(args msgArgs) string {
 	tmpl, err := template.New("msg").Parse(fe.pattern)
 	if err != nil {
 		return ""
 	}
-	// create io.Buffer for the message and executing template
 	sb := new(strings.Builder)
 	if err := tmpl.Execute(sb, args); err != nil {
 		return ""
