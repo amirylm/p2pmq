@@ -291,12 +291,12 @@ func TestGossipSimulation(t *testing.T) {
 					testOutput.Name = flow.name
 					testOutput.Iterations = uint(flow.iterations)
 					testOutput.Faucets = msgTraceFaucetsOutput{
-						Publish: faucets.publish,
-						Deliver: faucets.deliver,
-						Reject:  faucets.reject,
-						DropRPC: faucets.dropRPC,
-						SendRPC: faucets.sendRPC,
-						RecvRPC: faucets.recvRPC,
+						Publish: int(faucets.publish.Load()),
+						Deliver: int(faucets.deliver.Load()),
+						Reject:  int(faucets.reject.Load()),
+						DropRPC: int(faucets.dropRPC.Load()),
+						SendRPC: int(faucets.sendRPC.Load()),
+						RecvRPC: int(faucets.recvRPC.Load()),
 					}
 					testOutput.InboundRPC = pubsubRpcCount
 					testOutput.TotalTime = time.Since(start)

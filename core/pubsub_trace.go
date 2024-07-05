@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -16,23 +17,41 @@ import (
 )
 
 type traceFaucets struct {
-	join, leave, publish, deliver, reject, duplicate, addPeer, removePeer, graft, prune, sendRPC, dropRPC, recvRPC int
+	join, leave, publish, deliver, reject, duplicate, addPeer, removePeer, graft, prune, sendRPC, dropRPC, recvRPC *atomic.Uint64
+}
+
+func newTraceFaucets() traceFaucets {
+	return traceFaucets{
+		join:       new(atomic.Uint64),
+		leave:      new(atomic.Uint64),
+		publish:    new(atomic.Uint64),
+		deliver:    new(atomic.Uint64),
+		reject:     new(atomic.Uint64),
+		duplicate:  new(atomic.Uint64),
+		addPeer:    new(atomic.Uint64),
+		removePeer: new(atomic.Uint64),
+		graft:      new(atomic.Uint64),
+		prune:      new(atomic.Uint64),
+		sendRPC:    new(atomic.Uint64),
+		dropRPC:    new(atomic.Uint64),
+		recvRPC:    new(atomic.Uint64),
+	}
 }
 
 func (tf *traceFaucets) add(other traceFaucets) {
-	tf.join += other.join
-	tf.leave += other.leave
-	tf.publish += other.publish
-	tf.deliver += other.deliver
-	tf.reject += other.reject
-	tf.duplicate += other.duplicate
-	tf.addPeer += other.addPeer
-	tf.removePeer += other.removePeer
-	tf.graft += other.graft
-	tf.prune += other.prune
-	tf.sendRPC += other.sendRPC
-	tf.dropRPC += other.dropRPC
-	tf.recvRPC += other.recvRPC
+	tf.join.Add(other.join.Load())
+	tf.leave.Add(other.leave.Load())
+	tf.publish.Add(other.publish.Load())
+	tf.deliver.Add(other.deliver.Load())
+	tf.reject.Add(other.reject.Load())
+	tf.duplicate.Add(other.duplicate.Load())
+	tf.addPeer.Add(other.addPeer.Load())
+	tf.removePeer.Add(other.removePeer.Load())
+	tf.graft.Add(other.graft.Load())
+	tf.prune.Add(other.prune.Load())
+	tf.sendRPC.Add(other.sendRPC.Load())
+	tf.dropRPC.Add(other.dropRPC.Load())
+	tf.recvRPC.Add(other.recvRPC.Load())
 }
 
 type eventFields map[string]string
@@ -65,6 +84,7 @@ func newPubsubTracer(lggr *zap.SugaredLogger, debug bool, skiplist []string, sub
 		subTracer: subTracer,
 		skiplist:  skiplist,
 		debug:     debug,
+		faucets:   newTraceFaucets(),
 	}
 }
 
@@ -100,13 +120,13 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 	eventType := evt.GetType()
 	switch eventType {
 	case pubsub_pb.TraceEvent_PUBLISH_MESSAGE:
-		pst.faucets.publish++
+		pst.faucets.publish.Add(1)
 		msg := evt.GetPublishMessage()
 		evt.GetPeerID()
 		fields["msgID"] = hex.EncodeToString(msg.GetMessageID())
 		fields["topic"] = msg.GetTopic()
 	case pubsub_pb.TraceEvent_REJECT_MESSAGE:
-		pst.faucets.reject++
+		pst.faucets.reject.Add(1)
 		msg := evt.GetRejectMessage()
 		pid, err := peer.IDFromBytes(msg.GetReceivedFrom())
 		if err == nil {
@@ -116,7 +136,7 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 		fields["topic"] = msg.GetTopic()
 		fields["reason"] = msg.GetReason()
 	case pubsub_pb.TraceEvent_DUPLICATE_MESSAGE:
-		pst.faucets.duplicate++
+		pst.faucets.duplicate.Add(1)
 		msg := evt.GetDuplicateMessage()
 		pid, err := peer.IDFromBytes(msg.GetReceivedFrom())
 		if err == nil {
@@ -125,7 +145,7 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 		fields["msgID"] = hex.EncodeToString(msg.GetMessageID())
 		fields["topic"] = msg.GetTopic()
 	case pubsub_pb.TraceEvent_DELIVER_MESSAGE:
-		pst.faucets.deliver++
+		pst.faucets.deliver.Add(1)
 		msg := evt.GetDeliverMessage()
 		pid, err := peer.IDFromBytes(msg.GetReceivedFrom())
 		if err == nil {
@@ -134,25 +154,25 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 		fields["msgID"] = hex.EncodeToString(msg.GetMessageID())
 		fields["topic"] = msg.GetTopic()
 	case pubsub_pb.TraceEvent_ADD_PEER:
-		pst.faucets.addPeer++
+		pst.faucets.addPeer.Add(1)
 		pid, err := peer.IDFromBytes(evt.GetAddPeer().GetPeerID())
 		if err == nil {
 			fields["targetPeer"] = pid.String()
 		}
 	case pubsub_pb.TraceEvent_REMOVE_PEER:
-		pst.faucets.removePeer++
+		pst.faucets.removePeer.Add(1)
 		pid, err := peer.IDFromBytes(evt.GetRemovePeer().GetPeerID())
 		if err == nil {
 			fields["targetPeer"] = pid.String()
 		}
 	case pubsub_pb.TraceEvent_JOIN:
-		pst.faucets.join++
+		pst.faucets.join.Add(1)
 		fields["topic"] = evt.GetJoin().GetTopic()
 	case pubsub_pb.TraceEvent_LEAVE:
-		pst.faucets.leave++
+		pst.faucets.leave.Add(1)
 		fields["topic"] = evt.GetLeave().GetTopic()
 	case pubsub_pb.TraceEvent_GRAFT:
-		pst.faucets.graft++
+		pst.faucets.graft.Add(1)
 		msg := evt.GetGraft()
 		pid, err := peer.IDFromBytes(msg.GetPeerID())
 		if err == nil {
@@ -160,7 +180,7 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 		}
 		fields["topic"] = msg.GetTopic()
 	case pubsub_pb.TraceEvent_PRUNE:
-		pst.faucets.prune++
+		pst.faucets.prune.Add(1)
 		msg := evt.GetPrune()
 		pid, err := peer.IDFromBytes(msg.GetPeerID())
 		if err == nil {
@@ -168,7 +188,7 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 		}
 		fields["topic"] = msg.GetTopic()
 	case pubsub_pb.TraceEvent_SEND_RPC:
-		pst.faucets.sendRPC++
+		pst.faucets.sendRPC.Add(1)
 		msg := evt.GetSendRPC()
 		pid, err := peer.IDFromBytes(msg.GetSendTo())
 		if err == nil {
@@ -188,14 +208,14 @@ func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
 			fields["subs"] = strings.Join(subs, ",")
 		}
 	case pubsub_pb.TraceEvent_DROP_RPC:
-		pst.faucets.dropRPC++
+		pst.faucets.dropRPC.Add(1)
 		msg := evt.GetDropRPC()
 		pid, err := peer.IDFromBytes(msg.GetSendTo())
 		if err == nil {
 			fields["targetPeer"] = pid.String()
 		}
 	case pubsub_pb.TraceEvent_RECV_RPC:
-		pst.faucets.recvRPC++
+		pst.faucets.recvRPC.Add(1)
 		msg := evt.GetRecvRPC()
 		pid, err := peer.IDFromBytes(msg.GetReceivedFrom())
 		if err == nil {
