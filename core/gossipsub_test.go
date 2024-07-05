@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,31 +40,26 @@ var (
 	}
 )
 
-func TestGossipMsgThroughput(t *testing.T) {
+func TestGossipSimulation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	require.NoError(t, logging.SetLogLevelRegex("p2pmq", "error"))
 
-	// groupsCfgSimple11 := testGroupSimple(11, 4, 6, 1)
 	groupsCfgSimple18 := testGroupSimple(18, 10, 6, 2)
 	groupsCfgSimple36 := testGroupSimple(36, 16, 16, 4)
 	groupsCfgSimple54 := testGroupSimple(54, 32, 16, 6)
 
 	benchFlows := []flow{
-		// flowTrigger("a", 1, time.Millisecond*10),
 		flowActionA2B(1, time.Millisecond*1, time.Millisecond*250),
-		flowActionA2B(10, time.Millisecond*1, time.Millisecond*1),
-		// // flowActionA2B(50, time.Millisecond*1, time.Millisecond*1),
+		flowActionA2B(10, time.Millisecond*1, time.Millisecond*10),
 		flowActionA2B(100, time.Millisecond*1, time.Millisecond*10),
 		flowActionA2B(1000, time.Millisecond*10, time.Millisecond*10),
 		flowTrigger("b", 1, time.Millisecond*10),
-		flowTrigger("b", 10, time.Millisecond*1),
-		// flowTrigger("b", 50, time.Millisecond*1),
+		flowTrigger("b", 10, time.Millisecond*10),
 		flowTrigger("b", 100, time.Millisecond*10),
 		flowTrigger("b", 1000, time.Millisecond*10),
 		flowTrigger("a", 1, time.Millisecond*10),
 		flowTrigger("a", 10, time.Millisecond*10),
-		// // flowTrigger("b", 50, time.Millisecond*1),
 		flowTrigger("a", 100, time.Millisecond*10),
 		flowTrigger("a", 1000, time.Millisecond*10),
 	}
@@ -76,44 +73,6 @@ func TestGossipMsgThroughput(t *testing.T) {
 		conns        connectivity
 		flows        []flow
 	}{
-		// {
-		// 	name: "simple_11",
-		// 	n:    11,
-		// 	gen: &testGen{
-		// 		// hitMaps:   map[string]*nodeHitMap{},
-		// 		routingFn: func(m *pubsub.Message) {},
-		// 		validationFn: func(p peer.ID, m *pubsub.Message) pubsub.ValidationResult {
-		// 			return pubsub.ValidationAccept
-		// 		},
-		// 		pubsubConfig: &commons.PubsubConfig{
-		// 			MsgValidator: &commons.MsgValidationConfig{},
-		// 			Trace: &commons.PubsubTraceConfig{
-		// 				// JsonFile: fmt.Sprintf("../.output/trace/node-%d.json", i+1),
-		// 				Skiplist: traceEmptySkipList,
-		// 			},
-		// 			Overlay: &commons.OverlayParams{
-		// 				D:     3,
-		// 				Dlow:  2,
-		// 				Dhi:   5,
-		// 				Dlazy: 3,
-		// 			},
-		// 		},
-		// 	},
-		// 	groupsCfg: groupsCfgSimple11,
-		// 	conns: func() connectivity {
-		// 		conns := groupsCfgSimple11.baseConnectivity()
-		// 		// add some extra connections between a and b
-		// 		conns[0] = append(conns[0], 5, 7, 9)
-		// 		conns[1] = append(conns[1], 4, 6, 8)
-		// 		conns[2] = append(conns[2], 4, 5, 7)
-		// 		conns[3] = append(conns[3], 4, 6, 8)
-		// 		return conns
-		// 	}(),
-		// 	flows: []flow{
-		// 		flowActionA2B(1, time.Millisecond*1, time.Millisecond*250),
-		// 		flowTrigger("b", 2, time.Millisecond*10),
-		// 	},
-		// },
 		{
 			name: "simple_18",
 			n:    18,
@@ -206,6 +165,29 @@ func TestGossipMsgThroughput(t *testing.T) {
 			conns:     groupsCfgSimple54.allToAllConnectivity(),
 			flows:     benchFlows[:],
 		},
+	}
+
+	outDir := os.Getenv("GOSSIP_OUT_DIR")
+	if len(outDir) == 0 {
+		outDir = t.TempDir()
+	}
+	gossipSimulation := os.Getenv("GOSSIP_SIMULATION")
+	switch gossipSimulation {
+	case "full":
+		t.Log("running full simulation")
+	default:
+		t.Log("running limited simulation (only for 18 and 36 nodes and flows with less than 100 iterations)")
+		tests = tests[:3]
+		for i, tc := range tests {
+			newFlows := make([]flow, 0, len(tc.flows))
+			for _, f := range tc.flows {
+				if f.iterations < 100 {
+					newFlows = append(newFlows, f)
+				}
+			}
+			tc.flows = newFlows
+			tests[i] = tc
+		}
 	}
 
 	var outputs []gossipTestOutput
@@ -324,12 +306,12 @@ func TestGossipMsgThroughput(t *testing.T) {
 					<-time.After(time.Second * 2) // TODO: avoid timeout
 
 					faucets := traceFaucets{}
-					pubsubRpcCount := new(atomic.Uint64)
+					var pubsubRpcCount uint64
 					for _, ctrl := range ctrls {
 						nodeFaucets := ctrl.psTracer.faucets
 						// t.Logf("[%s] trace faucets: %+v", ctrl.lggr.Desugar().Name(), nodeFaucets)
 						faucets.add(nodeFaucets)
-						pubsubRpcCount.Add(ctrl.pubsubRpcCounter.Swap(0))
+						pubsubRpcCount += ctrl.pubsubRpcCounter.Swap(0)
 						ctrl.psTracer.Reset()
 					}
 					testOutput := baseTestOutput
@@ -343,7 +325,7 @@ func TestGossipMsgThroughput(t *testing.T) {
 						SendRPC: faucets.sendRPC,
 						RecvRPC: faucets.recvRPC,
 					}
-					testOutput.InboundRPC = pubsubRpcCount.Load()
+					testOutput.InboundRPC = pubsubRpcCount
 					testOutput.TotalTime = time.Since(start)
 					outputs = append(outputs, testOutput)
 					t.Logf("output: %+v", testOutput)
@@ -351,13 +333,11 @@ func TestGossipMsgThroughput(t *testing.T) {
 			}
 		})
 	}
-
-	// outDir := t.TempDir() // ../.output
-	// outputsJson, err := json.Marshal(outputs)
-	// require.NoError(t, err)
-	// outputFileName := fmt.Sprintf("%s/test-%d.json", outDir, time.Now().UnixMilli())
-	// require.NoError(t, os.WriteFile(outputFileName, outputsJson, 0644))
-	// t.Logf("outputs saved in %s", outputFileName)
+	outputsJson, err := json.Marshal(outputs)
+	require.NoError(t, err)
+	outputFileName := fmt.Sprintf("%s/test-%d.json", outDir, time.Now().UnixMilli())
+	require.NoError(t, os.WriteFile(outputFileName, outputsJson, 0644))
+	t.Logf("outputs saved in %s", outputFileName)
 }
 
 type connectivity map[int][]int
@@ -518,7 +498,12 @@ func (fe flowEvent) Msg(args msgArgs) string {
 		return ""
 	}
 	sb := new(strings.Builder)
-	if err := tmpl.Execute(sb, args); err != nil {
+	if err := tmpl.Execute(sb, map[string]interface{}{
+		"i":     args.i,
+		"group": args.group,
+		"ctrl":  args.ctrl,
+		"flow":  args.flow,
+	}); err != nil {
 		return ""
 	}
 	return sb.String()
