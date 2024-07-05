@@ -200,7 +200,7 @@ func TestGossipSimulation(t *testing.T) {
 			<-time.After(time.Second * 4) // TODO: avoid timeout
 
 			// starting fresh trace after subscriptions
-			startupFaucets := traceFaucets{}
+			startupFaucets := newTraceFaucets()
 			pubsubRpcCount := new(atomic.Uint64)
 			for _, ctrl := range ctrls {
 				startupFaucets.add(ctrl.psTracer.faucets)
@@ -278,7 +278,7 @@ func TestGossipSimulation(t *testing.T) {
 
 					<-time.After(time.Second * 2) // TODO: avoid timeout
 
-					faucets := traceFaucets{}
+					faucets := newTraceFaucets()
 					var pubsubRpcCount uint64
 					for _, ctrl := range ctrls {
 						nodeFaucets := ctrl.psTracer.faucets

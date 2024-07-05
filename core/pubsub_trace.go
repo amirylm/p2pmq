@@ -93,7 +93,7 @@ func (pst *psTracer) Reset() {
 	defer pst.lock.Unlock()
 
 	pst.events = nil
-	pst.faucets = traceFaucets{}
+	pst.faucets = newTraceFaucets()
 }
 
 func (pst *psTracer) Events() []eventFields {
