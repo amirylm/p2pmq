@@ -8,10 +8,10 @@ RUN apt-get update && \
   && rm -rf /var/lib/apt/lists/*
 
 ARG APP_VERSION=nightly
-ARG APP_NAME=p2pmq
+ARG APP_NAME=pmq
 ARG BUILD_TARGET=pmq
 
-WORKDIR /p2pmq
+WORKDIR /pmq
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -27,10 +27,10 @@ ARG BUILD_TARGET=pmq
 
 RUN apk --no-cache --upgrade add ca-certificates bash
 
-WORKDIR /p2pmq
+WORKDIR /pmq
 
-COPY --from=builder /p2pmq/.env* ./
-COPY --from=builder /p2pmq/resources/config/*.p2pmq.yaml ./
-COPY --from=builder /p2pmq/bin/${BUILD_TARGET} ./app
+COPY --from=builder /pmq/.env* ./
+COPY --from=builder /pmq/resources/config/*.pmq.yaml ./
+COPY --from=builder /pmq/bin/${BUILD_TARGET} ./app
 
 CMD ["./app"]

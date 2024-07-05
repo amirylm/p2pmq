@@ -1,4 +1,4 @@
-APP_NAME?=p2pmq
+APP_NAME?=pmq
 BUILD_TARGET?=${APP_NAME}
 BUILD_IMG?=${APP_NAME}
 APP_VERSION?=$(git describe --tags $(git rev-list --tags --max-count=1) 2> /dev/null || echo "nightly")
