@@ -125,7 +125,7 @@ func (n *Node) getLeader(net string, seq uint64) uint64 {
 	if !ok {
 		return 0
 	}
-	return (seq % uint64(len(share.Signers))) + 1
+	return RoundRobinLeader(seq, share.Signers)
 }
 
 // isProcessable ensures that we sign once and only leaders can trigger a new sequence

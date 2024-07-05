@@ -38,6 +38,12 @@ func (share *Share) QuorumCount() int {
 	return Threshold(len(share.Signers))
 }
 
+type LeaderSelector func(seq uint64, signers map[uint64]*bls.PublicKey) uint64
+
+func RoundRobinLeader(seq uint64, signers map[uint64]*bls.PublicKey) uint64 {
+	return (seq % uint64(len(signers))) + 1
+}
+
 func Threshold(count int) int {
 	f := (count - 1) / 3
 
