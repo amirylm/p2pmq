@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/amirylm/p2pmq/commons"
 	"github.com/amirylm/p2pmq/commons/utils"
@@ -12,6 +13,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	libp2pnetwork "github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -33,9 +36,11 @@ type Controller struct {
 	mdnsSvc mdns.Service
 	pubsub  *pubsub.PubSub
 
-	topicManager *topicManager
-	denylist     pubsub.Blacklist
-	subFilter    pubsub.SubscriptionFilter
+	topicManager     *topicManager
+	denylist         pubsub.Blacklist
+	subFilter        pubsub.SubscriptionFilter
+	psTracer         *psTracer
+	pubsubRpcCounter *atomic.Uint64
 
 	valRouter MsgRouter[pubsub.ValidationResult]
 	msgRouter MsgRouter[error]
@@ -46,15 +51,16 @@ func NewController(
 	cfg commons.Config,
 	msgRouter MsgRouter[error],
 	valRouter MsgRouter[pubsub.ValidationResult],
-	lggrNS string,
+	name string,
 ) (*Controller, error) {
 	d := &Controller{
-		threadControl: utils.NewThreadControl(),
-		lggr:          lggr.Named(lggrNS).Named("controller"),
-		cfg:           cfg,
-		valRouter:     valRouter,
-		msgRouter:     msgRouter,
-		topicManager:  newTopicManager(),
+		threadControl:    utils.NewThreadControl(),
+		lggr:             lggr.Named(name).Named("ctrl"),
+		cfg:              cfg,
+		valRouter:        valRouter,
+		msgRouter:        msgRouter,
+		topicManager:     newTopicManager(),
+		pubsubRpcCounter: new(atomic.Uint64),
 	}
 	err := d.setup(ctx, cfg)
 
@@ -63,6 +69,21 @@ func NewController(
 
 func (c *Controller) ID() string {
 	return c.host.ID().String()
+}
+
+func (c *Controller) Connect(ctx context.Context, dest *Controller) error {
+	ai := peer.AddrInfo{
+		ID:    dest.host.ID(),
+		Addrs: dest.host.Addrs(),
+	}
+	switch c.host.Network().Connectedness(ai.ID) {
+	case libp2pnetwork.Connected:
+		return nil
+	case libp2pnetwork.CannotConnect:
+		return fmt.Errorf("cannot connect to %s", ai.ID)
+	default:
+	}
+	return c.host.Connect(ctx, ai)
 }
 
 func (c *Controller) RefreshRouters(msgHandler func(*MsgWrapper[error]), valHandler func(*MsgWrapper[pubsub.ValidationResult])) {
@@ -78,7 +99,7 @@ func (c *Controller) RefreshRouters(msgHandler func(*MsgWrapper[error]), valHand
 
 func (c *Controller) Start(ctx context.Context) {
 	c.StartOnce(func() {
-		// d.lggr.Debugf("starting controller with host %s", d.host.ID())
+		c.lggr.Debugf("starting ctrl")
 
 		if c.msgRouter != nil {
 			c.threadControl.Go(c.msgRouter.Start)
@@ -98,7 +119,7 @@ func (c *Controller) Start(ctx context.Context) {
 				c.connect(b)
 			}
 			if err := c.dht.Bootstrap(ctx); err != nil {
-				c.lggr.Panicf("failed to start discovery: %w", err)
+				c.lggr.Panicf("failed to start dht: %w", err)
 			}
 		}
 		if c.mdnsSvc != nil {
@@ -111,7 +132,8 @@ func (c *Controller) Start(ctx context.Context) {
 
 func (c *Controller) Close() {
 	c.StopOnce(func() {
-		c.lggr.Debugf("closing controller with host %s", c.host.ID())
+		h := c.host.ID()
+		c.lggr.Debugf("closing controller with host %s", h)
 		c.threadControl.Close()
 		if c.dht != nil {
 			if err := c.dht.Close(); err != nil {
@@ -126,6 +148,7 @@ func (c *Controller) Close() {
 		if err := c.host.Close(); err != nil {
 			c.lggr.Errorf("failed to close host: %w", err)
 		}
+		c.lggr.Debugf("closed controller with host %s", h)
 	})
 }
 
@@ -194,7 +217,8 @@ func (c *Controller) setup(ctx context.Context, cfg commons.Config) (err error) 
 		return err
 	}
 	c.host = h
-	c.lggr.Infow("created libp2p host", "peerID", h.ID(), "addrs", h.Addrs())
+	c.lggr = c.lggr.With("peerID", h.ID())
+	c.lggr.Debugw("created libp2p host", "addrs", h.Addrs())
 
 	if len(cfg.MdnsTag) > 0 {
 		c.setupMdnsDiscovery(ctx, h, cfg.MdnsTag)
@@ -206,6 +230,8 @@ func (c *Controller) setup(ctx context.Context, cfg commons.Config) (err error) 
 			return err
 		}
 	}
+
+	c.lggr.Infow("ctrl setup done", "addrs", h.Addrs())
 
 	return nil
 }

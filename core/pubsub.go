@@ -9,9 +9,7 @@ import (
 	"github.com/amirylm/p2pmq/commons"
 	"github.com/amirylm/p2pmq/core/gossip"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"go.uber.org/zap"
 )
 
 var (
@@ -59,8 +57,23 @@ func (c *Controller) setupPubsubRouter(ctx context.Context, cfg commons.Config) 
 		opts = append(opts, pubsub.WithSubscriptionFilter(sf))
 	}
 
-	if cfg.Pubsub.Trace {
-		opts = append(opts, pubsub.WithEventTracer(newPubsubTracer(c.lggr.Named("PubsubTracer"))))
+	if cfg.Pubsub.Trace != nil {
+		var jtracer pubsub.EventTracer
+		if len(cfg.Pubsub.Trace.JsonFile) > 0 {
+			var err error
+			jtracer, err = pubsub.NewJSONTracer(cfg.Pubsub.Trace.JsonFile)
+			if err != nil {
+				return err
+			}
+		}
+		tracer := newPubsubTracer(c.lggr.Named("PubsubTracer"), cfg.Pubsub.Trace.Debug, cfg.Pubsub.Trace.Skiplist, jtracer)
+		c.psTracer = tracer.(*psTracer)
+		opts = append(opts, pubsub.WithEventTracer(tracer))
+		// TODO: config?
+		opts = append(opts, pubsub.WithAppSpecificRpcInspector(func(p peer.ID, rpc *pubsub.RPC) error {
+			c.pubsubRpcCounter.Add(1)
+			return nil
+		}))
 	}
 
 	ps, err := pubsub.NewGossipSub(ctx, c.host, opts...)
@@ -79,7 +92,7 @@ func (c *Controller) Publish(ctx context.Context, topicName string, data []byte)
 	if err != nil {
 		return err
 	}
-	// d.lggr.Debugw("publishing on topic", "topic", topicName, "data", string(data))
+	c.lggr.Debugw("publishing on topic", "topic", topicName, "data", string(data))
 	return topic.Publish(ctx, data)
 }
 
@@ -125,6 +138,28 @@ func (c *Controller) Subscribe(ctx context.Context, topicName string) error {
 		c.listenSubscription(ctx, sub)
 	})
 
+	return nil
+}
+
+func (c *Controller) Relay(topicName string) error {
+	topic, err := c.tryJoin(topicName)
+	if err != nil {
+		return err
+	}
+	cancel, err := topic.Relay()
+	if err != nil {
+		return err
+	}
+	c.topicManager.setTopicRelayCancelFn(topicName, cancel)
+	return nil
+}
+
+func (c *Controller) Unrelay(topicName string) error {
+	tw := c.topicManager.getTopicWrapper(topicName)
+	if tw.state.Load() == topicStateUnknown {
+		return nil // TODO: topic not found?
+	}
+	tw.relayCancelFn()
 	return nil
 }
 
@@ -182,7 +217,7 @@ func (c *Controller) tryJoin(topicName string) (*pubsub.Topic, error) {
 
 	if cfg.MsgValidator != nil || c.cfg.Pubsub.MsgValidator != nil {
 		msgValConfig := (&commons.MsgValidationConfig{}).Defaults(c.cfg.Pubsub.MsgValidator)
-		if cfg.MsgValidator != nil {
+		if cfg.MsgValidator != nil { // specific topic validator config
 			msgValConfig = msgValConfig.Defaults(cfg.MsgValidator)
 		}
 		valOpts := []pubsub.ValidatorOpt{
@@ -236,22 +271,4 @@ func (c *Controller) validateMsg(ctx context.Context, p peer.ID, msg *pubsub.Mes
 
 func (c *Controller) inspectPeerScores(map[peer.ID]*pubsub.PeerScoreSnapshot) {
 	// TODO
-}
-
-// psTracer helps to trace pubsub events, implements pubsublibp2p.EventTracer
-type psTracer struct {
-	lggr *zap.SugaredLogger
-}
-
-// NewTracer creates an instance of pubsub tracer
-func newPubsubTracer(lggr *zap.SugaredLogger) pubsub.EventTracer {
-	return &psTracer{
-		lggr: lggr.Named("PubsubTracer"),
-	}
-}
-
-// Trace handles events, implementation of pubsub.EventTracer
-func (pst *psTracer) Trace(evt *pubsub_pb.TraceEvent) {
-	eType := evt.GetType().String()
-	pst.lggr.Debugw("pubsub event", "type", eType)
 }

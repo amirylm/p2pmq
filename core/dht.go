@@ -6,13 +6,12 @@ import (
 
 	"github.com/amirylm/p2pmq/commons"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	dhtopts "github.com/libp2p/go-libp2p-kad-dht/opts"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 )
 
-func (c *Controller) dhtRoutingFactory(ctx context.Context, opts ...dhtopts.Option) func(host.Host) (routing.PeerRouting, error) {
+func (c *Controller) dhtRoutingFactory(ctx context.Context, opts ...dht.Option) func(host.Host) (routing.PeerRouting, error) {
 	return func(h host.Host) (routing.PeerRouting, error) {
 		dhtInst, err := dht.New(ctx, h, opts...)
 		if err != nil {

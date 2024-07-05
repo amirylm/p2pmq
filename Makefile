@@ -1,10 +1,14 @@
-APP_NAME?=p2pmq
+APP_NAME?=pmq
 BUILD_TARGET?=${APP_NAME}
 BUILD_IMG?=${APP_NAME}
 APP_VERSION?=$(git describe --tags $(git rev-list --tags --max-count=1) 2> /dev/null || echo "nightly")
 CFG_PATH?=./resources/config/default.p2pmq.yaml
 TEST_PKG?=./core/...
 TEST_TIMEOUT?=2m
+GOSSIP_OUT_DIR=../.output
+
+protoc:
+	./scripts/proto-gen.sh
 
 lint:
 	@docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v1.54 golangci-lint run -v --timeout=5m ./...
@@ -46,3 +50,9 @@ docker-run-default:
 
 docker-run-boot:
 	@docker run -d --restart unless-stopped --name "${APP_NAME}" -p "${TCP_PORT}":"${TCP_PORT}" -p "${GRPC_PORT}":"${GRPC_PORT}" -e "GRPC_PORT=${GRPC_PORT}" -it "${BUILD_IMG}" /p2pmq/app -config=./bootstrapper.p2pmq.yaml
+
+gossip-sim:
+	@mkdir -p "${GOSSIP_OUT_DIR}" \
+		&& export GOSSIP_SIMULATION=full \
+		&& export GOSSIP_OUT_DIR="${GOSSIP_OUT_DIR}" \
+		&& go test -v -timeout 10m ./core -run TestGossipSimulation

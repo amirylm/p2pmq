@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,59 +36,49 @@ func SetupTestControllers(ctx context.Context, t *testing.T, n int, routingFn fu
 
 	<-time.After(time.Second * 2)
 
-	hitMap := map[string]*atomic.Int32{}
-	for i := 0; i < n; i++ {
-		hitMap[fmt.Sprintf("test-%d", i+1)] = &atomic.Int32{}
+	gen := &DefaultGenerator{
+		BootAddr:     fmt.Sprintf("%s/p2p/%s", bootAddr, boot.host.ID()),
+		RoutingFn:    routingFn,
+		ValidationFn: valFn,
 	}
+	controllers, msgRouters, valRouters, done, err := StartControllers(ctx, n, gen)
+	require.NoError(t, err)
 
-	controllers := make([]*Controller, n)
-	msgRouters := make([]MsgRouter[error], n)
-	valRouters := make([]MsgRouter[pubsub.ValidationResult], n)
-	for i := 0; i < n; i++ {
-		cfg := commons.Config{
-			ListenAddrs: []string{
-				"/ip4/127.0.0.1/tcp/0",
-			},
-			// MdnsTag: "p2pmq/mdns/test",
-			Discovery: &commons.DiscoveryConfig{
-				Mode:           commons.ModeServer,
-				ProtocolPrefix: "p2pmq/kad/test",
-				Bootstrappers: []string{
-					fmt.Sprintf("%s/p2p/%s", bootAddr, boot.host.ID()),
-				},
-			},
-			Pubsub: &commons.PubsubConfig{
-				MsgValidator: &commons.MsgValidationConfig{},
-			},
-		}
-		msgRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[error]) {
-			routingFn(mw.Msg)
-		}, gossip.DefaultMsgIDFn)
-		valRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[pubsub.ValidationResult]) {
-			res := valFn(mw.Peer, mw.Msg)
-			mw.Result = res
-		}, gossip.DefaultMsgIDFn)
-		c, err := NewController(ctx, cfg, msgRouter, valRouter, fmt.Sprintf("peer-%d", i+1))
-		require.NoError(t, err)
-		controllers[i] = c
-		msgRouters[i] = msgRouter
-		valRouters[i] = valRouter
-		t.Logf("created controller %d: %s", i+1, c.host.ID())
-	}
-
-	for i, c := range controllers {
-		c.Start(ctx)
-		t.Logf("started controller %d: %s", i+1, c.host.ID())
-	}
+	t.Logf("created %d controllers", n)
 
 	waitControllersConnected(n)
 
 	return controllers, msgRouters, valRouters, func() {
-		go boot.Close() // closing bootstrapper in the background
+		done()
+		boot.Close()
+	}
+}
+
+func StartControllers(ctx context.Context, n int, gen Generator) ([]*Controller, []MsgRouter[error], []MsgRouter[pubsub.ValidationResult], func(), error) {
+	controllers := make([]*Controller, 0, n)
+	msgRouters := make([]MsgRouter[error], 0, n)
+	valRouters := make([]MsgRouter[pubsub.ValidationResult], 0, n)
+	done := func() {
 		for _, c := range controllers {
 			c.Close()
 		}
 	}
+	for i := 0; i < n; i++ {
+		cfg, msgRouter, valRouter, name := gen.NextConfig(i)
+		c, err := NewController(ctx, cfg, msgRouter, valRouter, name)
+		if err != nil {
+			return controllers, msgRouters, valRouters, done, err
+		}
+		controllers = append(controllers, c)
+		msgRouters = append(msgRouters, msgRouter)
+		valRouters = append(valRouters, valRouter)
+	}
+
+	for _, c := range controllers {
+		c.Start(ctx)
+	}
+
+	return controllers, msgRouters, valRouters, done, nil
 }
 
 func waitControllersConnected(n int, controllers ...*Controller) {
@@ -107,4 +96,45 @@ func waitControllersConnected(n int, controllers ...*Controller) {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+type Generator interface {
+	NextConfig(i int) (commons.Config, MsgRouter[error], MsgRouter[pubsub.ValidationResult], string)
+}
+
+type DefaultGenerator struct {
+	BootAddr     string
+	RoutingFn    func(*pubsub.Message)
+	ValidationFn func(peer.ID, *pubsub.Message) pubsub.ValidationResult
+}
+
+func (g *DefaultGenerator) NextConfig(i int) (commons.Config, MsgRouter[error], MsgRouter[pubsub.ValidationResult], string) {
+	cfg := commons.Config{
+		ListenAddrs: []string{
+			"/ip4/127.0.0.1/tcp/0",
+		},
+		MdnsTag: "p2pmq/mdns/test",
+		// Discovery: &commons.DiscoveryConfig{
+		// 	Mode:           commons.ModeServer,
+		// 	ProtocolPrefix: "p2pmq/kad/test",
+		// 	Bootstrappers: []string{
+		// 		g.BootAddr,
+		// 		// fmt.Sprintf("%s/p2p/%s", g.BootAddr, boot.host.ID()),
+		// 	},
+		// },
+		Pubsub: &commons.PubsubConfig{
+			MsgValidator: &commons.MsgValidationConfig{},
+		},
+	}
+
+	msgRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[error]) {
+		g.RoutingFn(mw.Msg)
+	}, gossip.DefaultMsgIDFn)
+
+	valRouter := NewMsgRouter(1024, 4, func(mw *MsgWrapper[pubsub.ValidationResult]) {
+		res := g.ValidationFn(mw.Peer, mw.Msg)
+		mw.Result = res
+	}, gossip.DefaultMsgIDFn)
+
+	return cfg, msgRouter, valRouter, fmt.Sprintf("node-%d", i+1)
 }

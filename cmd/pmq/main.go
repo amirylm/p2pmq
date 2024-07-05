@@ -17,7 +17,7 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name: "p2pmq",
+		Name: "pmq",
 		Flags: []cli.Flag{
 			cli.IntFlag{
 				Name:   "grpc-port",
@@ -91,20 +91,6 @@ func main() {
 
 			ctrl.Start(ctx)
 			defer ctrl.Close()
-
-			// <-time.After(time.Second * 10)
-
-			// if cfg.Pubsub != nil {
-			// 	if err := ctrl.Subscribe(ctx, "test-1"); err != nil {
-			// 		lggr.Errorw("could not subscribe to topic", "topic", "test-1", "err", err)
-			// 	}
-			// 	for i := 0; i < 10; i++ {
-			// 		<-time.After(time.Second * 5)
-			// 		if err := ctrl.Publish(ctx, "test-1", []byte(fmt.Sprintf("test-data-%d-%s", i, ctrl.ID()))); err != nil {
-			// 			lggr.Errorw("could not subscribe to topic", "topic", "test-1", "err", err)
-			// 		}
-			// 	}
-			// }
 
 			return grpcapi.ListenGrpc(srv, c.Int("grpc-port"))
 

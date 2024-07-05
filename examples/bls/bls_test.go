@@ -232,26 +232,27 @@ func triggerReports(pctx context.Context, t *testing.T, net string, interval tim
 				if !ok {
 					continue
 				}
-				if node.getLeader(net, nextSeq) == share.SignerID {
-					node.threadC.Go(func(ctx context.Context) {
-						report := &SignedReport{
-							Network:   net,
-							SeqNumber: nextSeq,
-							Data:      []byte(fmt.Sprintf("report for %s, seq %d", net, nextSeq)),
-						}
-						share.Sign(report)
-						if pctx.Err() != nil || ctx.Err() != nil { // ctx might be canceled by the time we get here
+				if node.getLeader(net, nextSeq) != share.SignerID {
+					continue
+				}
+				node.threadC.Go(func(ctx context.Context) {
+					report := &SignedReport{
+						Network:   net,
+						SeqNumber: nextSeq,
+						Data:      []byte(fmt.Sprintf("report for %s, seq %d", net, nextSeq)),
+					}
+					share.Sign(report)
+					if pctx.Err() != nil || ctx.Err() != nil { // ctx might be canceled by the time we get here
+						return
+					}
+					if err := node.Broadcast(ctx, *report); ctx.Err() == nil && pctx.Err() == nil {
+						if err != nil && strings.Contains(err.Error(), "context canceled") {
 							return
 						}
-						if err := node.Broadcast(ctx, *report); ctx.Err() == nil && pctx.Err() == nil {
-							if err != nil && strings.Contains(err.Error(), "context canceled") {
-								return
-							}
-							require.NoError(t, err)
-							reports.Add(net, *report)
-						}
-					})
-				}
+						require.NoError(t, err)
+						reports.Add(net, *report)
+					}
+				})
 			}
 		}
 	}

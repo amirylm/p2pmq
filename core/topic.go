@@ -19,9 +19,10 @@ func newTopicManager() *topicManager {
 }
 
 type topicWrapper struct {
-	state atomic.Int32
-	topic *pubsub.Topic
-	sub   *pubsub.Subscription
+	state         atomic.Int32
+	topic         *pubsub.Topic
+	sub           *pubsub.Subscription
+	relayCancelFn pubsub.RelayCancelFunc
 }
 
 const (
@@ -52,6 +53,20 @@ func (tm *topicManager) upgradeTopic(name string, topic *pubsub.Topic) bool {
 		return false
 	}
 	tw.topic = topic
+	tm.topics[name] = tw
+
+	return true
+}
+
+func (tm *topicManager) setTopicRelayCancelFn(name string, fn pubsub.RelayCancelFunc) bool {
+	tm.lock.Lock()
+	defer tm.lock.Unlock()
+
+	tw, ok := tm.topics[name]
+	if !ok {
+		return false
+	}
+	tw.relayCancelFn = fn
 	tm.topics[name] = tw
 
 	return true
