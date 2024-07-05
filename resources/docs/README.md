@@ -1,4 +1,10 @@
-# Decentralized Messaging Engine
+# PMQ 
+
+<br />
+
+**WARNING: This is an experimental work in progress, DO NOT USE in production**
+
+<br />
 
 This document describes a solution for cross networks communication, including oracle, offchain computation or blockchain networks.
 
@@ -24,7 +30,7 @@ This document describes a solution for cross networks communication, including o
 
 ## Overview
 
-By introducing a decentralized messaging engine (DME) that facilitates the secure exchange of verifiable messages across networks, we enable the formation of a global, collaborative network that consists of multiple overlay networks.
+By introducing a decentralized messaging engine that facilitates the secure exchange of verifiable messages across networks, we enable the formation of a global, collaborative network that consists of multiple overlay networks.
 
 The resulting protocol leverages libp2p and gossipsub v1.1 in order to provide robust networking and message propagation while ensuring the integrity and authenticity of transmitted data by outsourcing the process of cryptographic and sequence validation.
 
