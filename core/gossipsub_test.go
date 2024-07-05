@@ -21,25 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	traceEmptySkipList    = []string{}
-	traceMsgEventSkipList = []string{
-		"ADD_PEER",
-		"REMOVE_PEER",
-		"JOIN",
-		"LEAVE",
-		"GRAFT",
-		"PRUNE",
-		"DROP_RPC",
-	}
-	traceGossipEventSkipList = []string{
-		"ADD_PEER",
-		"REMOVE_PEER",
-		"JOIN",
-		"LEAVE",
-	}
-)
-
 func TestGossipSimulation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -84,9 +65,7 @@ func TestGossipSimulation(t *testing.T) {
 				},
 				pubsubConfig: &commons.PubsubConfig{
 					MsgValidator: &commons.MsgValidationConfig{},
-					Trace: &commons.PubsubTraceConfig{
-						Skiplist: traceEmptySkipList,
-					},
+					Trace:        &commons.PubsubTraceConfig{},
 					Overlay: &commons.OverlayParams{
 						D:     3,
 						Dlow:  2,
@@ -110,9 +89,7 @@ func TestGossipSimulation(t *testing.T) {
 				},
 				pubsubConfig: &commons.PubsubConfig{
 					MsgValidator: &commons.MsgValidationConfig{},
-					Trace: &commons.PubsubTraceConfig{
-						Skiplist: traceEmptySkipList,
-					},
+					Trace:        &commons.PubsubTraceConfig{},
 					Overlay: &commons.OverlayParams{
 						D:     4,
 						Dlow:  2,
@@ -136,9 +113,7 @@ func TestGossipSimulation(t *testing.T) {
 				},
 				pubsubConfig: &commons.PubsubConfig{
 					MsgValidator: &commons.MsgValidationConfig{},
-					Trace: &commons.PubsubTraceConfig{
-						Skiplist: traceEmptySkipList,
-					},
+					Trace:        &commons.PubsubTraceConfig{},
 				},
 			},
 			groupsCfg: groupsCfgSimple36,
@@ -156,9 +131,7 @@ func TestGossipSimulation(t *testing.T) {
 				},
 				pubsubConfig: &commons.PubsubConfig{
 					MsgValidator: &commons.MsgValidationConfig{},
-					Trace: &commons.PubsubTraceConfig{
-						Skiplist: traceEmptySkipList,
-					},
+					Trace:        &commons.PubsubTraceConfig{},
 				},
 			},
 			groupsCfg: groupsCfgSimple54,
@@ -380,21 +353,21 @@ type groupsCfg map[string]groupCfg
 // baseConnectivity returns a base connectivity map for the groups,
 // where each group member is connected to all other members of the group
 // and to the relayers.
-func (groups groupsCfg) baseConnectivity() connectivity {
-	conns := make(connectivity)
-	var relayerIDs []int
-	relayers, ok := groups["relayers"]
-	if ok {
-		relayerIDs = relayers.ids
-	}
-	for _, cfg := range groups {
-		connectIDs := append(cfg.ids, relayerIDs...)
-		for _, i := range cfg.ids {
-			conns[i] = connectIDs
-		}
-	}
-	return conns
-}
+// func (groups groupsCfg) baseConnectivity() connectivity {
+// 	conns := make(connectivity)
+// 	var relayerIDs []int
+// 	relayers, ok := groups["relayers"]
+// 	if ok {
+// 		relayerIDs = relayers.ids
+// 	}
+// 	for _, cfg := range groups {
+// 		connectIDs := append(cfg.ids, relayerIDs...)
+// 		for _, i := range cfg.ids {
+// 			conns[i] = connectIDs
+// 		}
+// 	}
+// 	return conns
+// }
 
 func (groups groupsCfg) allToAllConnectivity() connectivity {
 	conns := make(connectivity)

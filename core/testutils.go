@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/host"
 	libp2pnetwork "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
@@ -80,27 +79,6 @@ func StartControllers(ctx context.Context, n int, gen Generator) ([]*Controller,
 	}
 
 	return controllers, msgRouters, valRouters, done, nil
-}
-
-func waitMinConnected(ctx context.Context, minConnected func(i int) int, backoff time.Duration, hosts ...host.Host) {
-	for i, h := range hosts {
-		connected := make([]peer.ID, 0)
-		min := minConnected(i)
-		for len(connected) < min && ctx.Err() == nil {
-			peers := h.Network().Peers()
-			for _, pid := range peers {
-				switch h.Network().Connectedness(pid) {
-				case libp2pnetwork.Connected:
-					connected = append(connected, pid)
-				default:
-				}
-			}
-			if len(connected) < min {
-				fmt.Printf("host %s connected to %d peers, waiting for %d\n", h.ID(), len(connected), min)
-			}
-			time.Sleep(backoff)
-		}
-	}
 }
 
 func waitControllersConnected(n int, controllers ...*Controller) {
