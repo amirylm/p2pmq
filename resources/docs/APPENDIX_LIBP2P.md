@@ -37,17 +37,22 @@ Secure channels in libp2p are established with the help of a transport upgrader,
 
 ## Pubsub
 
+Libp2p's pubsub system is designed to be extensible by more specialized routers and provides an optimized environment for a distributed protocol that runs over a trustless p2p network.
+
 ### Key Concepts of Gossiping
 
-1. **Fanout Groups:** In a gossip-based network like Gossipsub, peers are organized into "fanout groups" based on their interests, i.e., the topics they subscribe to. Each fanout group represents a set of peers interested in the same topic. Messages are gossiped within these fanout groups to ensure that relevant information reaches its intended audience efficiently.
-2. **Mesh Peers:** Within each fanout group, a subset of peers forms a "mesh." The mesh represents a more tightly connected subgroup where every member is directly connected to every other member. Messages are initially sent to mesh peers, who play a crucial role in the efficient propagation of messages within their fanout group.
-3. **Message Propagation:** Gossiping relies on a "gossip" mechanism where mesh peers share messages they have received with other mesh peers within the same fanout group. This propagation method ensures that messages quickly spread to all members of the group without overloading the network with redundant copies. Gossiping reduces the number of messages sent while maximizing their reach.
-4. **Heartbeat Interval:** Gossipsub introduces a "heartbeat" mechanism that defines a regular interval at which peers exchange heartbeat messages with their mesh peers. Heartbeats help maintain the freshness of the mesh and enable the discovery of new topics or subscriptions. During heartbeats, peers can also inform each other about their latest state, including the topics they are interested in.
-5. **Message Validation:** To maintain the integrity and authenticity of messages, Gossipsub requires that all messages by signed by their publishers. [Extended validators](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md#extended-validators)
-allows to aid-in a custom, decoupled validation process. Invalid messages are promptly discarded to prevent the spread of misinformation, and the sending peers are punished with low score.
-**NOTE:** in our case the validation is being facilitated over duplex stream and verifies that all messages have a reasonable sequence number, and were signed by a quorum of signers as part of OCR. 
-6. **Peer Scoring:** Gossipsub incorporates a "peer scoring" mechanism to evaluate the behavior and trustworthiness of network peers. Peers are assigned scores based on various factors, including their message forwarding reliability, responsiveness, and adherence to protocol rules. Low-scoring peers may be disconnected from the network to maintain its health and reliability.
-7. **Pruning:** To further optimize the network's efficiency, Gossipsub employs a "pruning" mechanism. This mechanism removes peers from the mesh and fanout groups when they are no longer interested in a particular topic. Pruning ensures that resources are allocated efficiently, and peers focus on propagating messages relevant to their subscriptions.
+Gossipsub v1.1 is a dynamic and efficient message propagation protocol, it is based on randomized topic meshes and gossip, with moderate amplification factors and good scaling properties.
+
+* Gossipsub introduces a **heartbeat** mechanism that defines a regular interval at which peers exchange heartbeat messages with their mesh peers
+    * Heartbeats help maintain the freshness of the mesh and enable the discovery of new topics or subscriptions
+    * During heartbeats, peers can also inform each other about their latest state, including the topics they are interested in
+* Gossipsub orchestrates dynamic, real-time subscription/peering management while outsourcing peer discovery for flexibility
+* Gossipsub facilitates concurrent & configurable validation system that allows to outsource validation using [extended validators](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md#extended-validators)
+* Gossipsub incorporates a **peer scoring** mechanism to evaluate the behavior and trustworthiness of network peers. Peers are assigned scores based on various factors, including their message forwarding reliability, responsiveness, and adherence to protocol rules
+    * Low-scoring peers may be disconnected from the network to maintain its health and reliability
+* Gossiping enables to have a loosely connected network of nodes, while all-2-all requires fully connected network
+    * helps to scale and overcome bad network conditions where we don't have connectivity among all participants
+* Gossipsub is using a msg_id concept which is useful for de-duplication, to ensure each message is processed only once
 
 ### How Gossipsub Works
 
@@ -58,7 +63,4 @@ at regular intervals (1s is the default). The heartbeat serves three functions:
 2. [fanout maintenance](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.0.md#fanout-maintenance) to efficiently adjust fanout groups based on changing interests
 3. [gossip emission](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.0.md#gossip-emission) to a random selection of peers for each topic (that are not already members of the topic mesh)
 - **Piggybacking:** Gossipsub employs [piggybacking](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.0.md#control-message-piggybacking) - a technique where acknowledgment (ACK) messages carry new messages. When a peer sends an ACK for a message, it may include new messages it has received. This optimizes bandwidth usage by combining acknowledgment and message propagation in a single step.
-
-To summarize, `gossipsub` leverages a combination of fanout groups, mesh peers, message propagation, heartbeat intervals, peer scoring, message validation, and piggybacking to efficiently distribute messages within decentralized networks. These mechanisms ensure that messages reach their intended recipients while maintaining network health and minimizing redundancy.
-
 
