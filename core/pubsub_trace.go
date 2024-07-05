@@ -54,6 +54,22 @@ func (tf *traceFaucets) add(other traceFaucets) {
 	tf.recvRPC.Add(other.recvRPC.Load())
 }
 
+func (tf *traceFaucets) set(other traceFaucets) {
+	tf.join.Store(other.join.Load())
+	tf.leave.Store(other.leave.Load())
+	tf.publish.Store(other.publish.Load())
+	tf.deliver.Store(other.deliver.Load())
+	tf.reject.Store(other.reject.Load())
+	tf.duplicate.Store(other.duplicate.Load())
+	tf.addPeer.Store(other.addPeer.Load())
+	tf.removePeer.Store(other.removePeer.Load())
+	tf.graft.Store(other.graft.Load())
+	tf.prune.Store(other.prune.Load())
+	tf.sendRPC.Store(other.sendRPC.Load())
+	tf.dropRPC.Store(other.dropRPC.Load())
+	tf.recvRPC.Store(other.recvRPC.Load())
+}
+
 type eventFields map[string]string
 
 func MarshalTraceEvents(events []eventFields) ([]byte, error) {
@@ -93,7 +109,7 @@ func (pst *psTracer) Reset() {
 	defer pst.lock.Unlock()
 
 	pst.events = nil
-	pst.faucets = newTraceFaucets()
+	pst.faucets.set(newTraceFaucets())
 }
 
 func (pst *psTracer) Events() []eventFields {
